@@ -1,6 +1,6 @@
 # Claude Code (研究版) 完整构建与安装教程
 
-**源码仓库**: [https://github.com/beita6969/claude-code](https://github.com/beita6969/claude-code)
+**源码仓库**: https://github.com/instructkr/claude-code
 
 本教程旨在指导您在 Windows 环境下从零开始构建、安装并成功运行 Claude Code。
 
@@ -36,7 +36,7 @@
 
 ## 3. 核心修复步骤 (Critical Fixes)
 
-必须手动修改以下三个文件，否则程序将无法启动或在运行时崩溃。
+若报错，则必须手动修改以下三个文件，否则程序将无法启动或在运行时崩溃。若正常构建启动则可跳过这步。
 
 ### A. 补全 ColorDiff 缺失方法
 
@@ -115,6 +115,6 @@
     $env:HTTP_PROXY="http://127.0.0.1:您的代理端口"
     $env:HTTPS_PROXY="http://127.0.0.1:您的代理端口"
     ```
-* **ColorDiff...render is not a function**:
 
-  * **检查**: 请重新确认步骤 3.A 是否已正确保存。
+* **使用其他 API (OpenAI/DeepSeek等)**:
+  * **工具**: 使用 [cc-switch](https://github.com/farion1231/cc-switch) 可以轻松让 Claude Code 兼容非 Anthropic 的 API。

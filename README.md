@@ -47,6 +47,7 @@ bun run dev
 ## ⚠️ 注意事项 (网络与 API)
 
 -   **API Key**: 运行前请确保已设置环境变量 `ANTHROPIC_API_KEY`。
+-   **使用第三方 API**: 如果您想使用 OpenAI、DeepSeek 等其他模型，可以使用 [cc-switch](https://github.com/farion1231/cc-switch) 工具进行快速切换。
 -   **网络代理**: 如果你在国内环境运行，启动时若提示 `Unable to connect to Anthropic services`，请在终端设置代理：
     ```powershell
     $env:HTTP_PROXY="http://127.0.0.1:您的代理端口"

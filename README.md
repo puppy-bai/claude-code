@@ -17,7 +17,7 @@ powershell -c "irm bun.sh/install.ps1 | iex"
 
 ### 2. 下载并安装依赖
 ```powershell
-git clone <你的仓库地址>
+git clone https://github.com/puppy-bai/claude-code
 cd claude-code
 bun install --ignore-scripts
 ```
@@ -56,12 +56,23 @@ bun run dev
 
 ---
 
-## 📂 项目结构概览
+## 📂 项目结构与核心文件说明
 
--   `src/entrypoints/cli.tsx`: 真正的 CLI 入口，处理环境初始化。
--   `src/main.tsx`: 核心业务逻辑与 Agent 循环。
--   `src/stubs/`: 存放所有缺失依赖的模拟实现（Stub）。
--   `BUILD_GUIDE.md`: 更详细的底层修改记录。
+### 1. 运行与构建文件
+- **`dist/main.js`**: 构建后生成的最终可执行文件（约 20MB），包含所有依赖。可以直接通过 `bun dist/main.js` 运行。
+- **`src/entrypoints/cli.tsx`**: CLI 入口，负责 `MACRO` 注入、环境初始化及启动核心逻辑。
+- **`src/main.tsx`**: 核心 Agent 循环逻辑，管理对话流程与工具调用。
+
+### 2. 关键系统模块
+- **`src/QueryEngine.ts`**: 处理与 Anthropic API 的底层通信及上下文管理。
+- **`src/tools/`**: 包含 40+ 自动化工具，如 `BashTool` (执行 Shell)、`FileEditTool` (精准代码编辑)。
+- **`src/memdir/`**: 智能体内存系统，持久化存储项目知识和用户偏好。
+- **`src/stubs/`**: **关键修复目录**，存放所有缺失原生依赖的模拟实现（Stub）。
+
+### 3. 配置与脚本
+- **`package.json`**: 定义了项目依赖、构建脚本（`build`）及开发启动脚本（`dev`）。
+- **`bunfig.toml`**: Bun 运行时的专属配置文件。
+- **`BUILD_GUIDE.md`**: 详尽的底层修复记录，记录了所有为了让泄露版跑起来所做的改动。
 
 ---
 **免责声明**: 本项目仅供安全研究与教育目的使用。

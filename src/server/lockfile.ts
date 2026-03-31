@@ -1,0 +1,2 @@
+// Stub: server/lockfile
+export {}

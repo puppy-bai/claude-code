@@ -1,0 +1,2 @@
+[run]
+preload = ["./src/stubs/bun-bundle-preload.ts"]

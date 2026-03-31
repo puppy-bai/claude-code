@@ -1,5 +1,17 @@
 import { feature } from 'bun:bundle';
 
+if (typeof globalThis.MACRO === 'undefined') {
+  (globalThis as any).MACRO = {
+    VERSION: '2.1.87',
+    BUILD_TIME: new Date().toISOString(),
+    PACKAGE_URL: '@anthropic-ai/claude-code',
+    NATIVE_PACKAGE_URL: undefined,
+    FEEDBACK_CHANNEL: '#claude-code-research',
+    ISSUES_EXPLAINER: 'https://github.com/beita6969/claude-code/issues',
+    VERSION_CHANGELOG: '',
+  };
+}
+
 // Bugfix for corepack auto-pinning, which adds yarnpkg to peoples' package.jsons
 // eslint-disable-next-line custom-rules/no-top-level-side-effects
 process.env.COREPACK_ENABLE_AUTO_PIN = '0';

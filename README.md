@@ -1,194 +1,67 @@
-# Claude Code Source - Buildable Research Fork
+# Claude Code (Windows 可直接构建运行版)
 
-> A **buildable, modifiable, and runnable** version of the Claude Code source.
-
-Based on the Claude Code source snapshot publicly exposed on 2026-03-31 via an npm source map leak. The original snapshot contained only raw TypeScript source with no build configuration — it could not be compiled or run. This fork reconstructs the full build system and fixes all missing components to make it functional.
-
----
-
-## What Changed vs. the Original Snapshot
-
-The original snapshot shipped **no `package.json`, no `tsconfig.json`, no lockfile, and no build scripts**. Over 100 internal/feature-gated modules were also missing from the source map.
-
-### Build System (Reconstructed)
-
-| File | Purpose |
-|------|---------|
-| `package.json` | 60+ npm dependencies reverse-engineered from ~1,900 source files |
-| `tsconfig.json` | TypeScript config (ESNext + JSX + Bun bundler resolution) |
-| `bunfig.toml` | Bun runtime configuration |
-| `.gitignore` | Excludes `node_modules/`, `dist/`, lockfiles |
-
-### Stub Modules (Created)
-
-The original source imports many Anthropic-internal packages and feature-gated modules that were not included in the leak. Minimal stubs were created so the build completes:
-
-| Category | Count | Examples |
-|----------|-------|---------|
-| Anthropic internal packages (`@ant/*`) | 4 | computer-use-mcp, computer-use-swift, claude-for-chrome-mcp |
-| Native addons | 3 | color-diff-napi, audio-capture-napi, modifiers-napi |
-| Cloud provider SDKs | 6 | Bedrock/Foundry/Vertex SDK, AWS STS, Azure Identity |
-| OpenTelemetry exporters | 10 | OTLP gRPC/HTTP/Proto exporters |
-| Other optional packages | 2 | sharp, turndown |
-| Feature-gated source modules | ~90 | Tools, commands, services, components excluded from the source map |
-
-### Source Fixes
-
-| File | Change |
-|------|--------|
-| `src/main.tsx` | Runtime `MACRO` constant injection (compile-time define in production) |
-| `src/main.tsx` | Fixed Commander.js `-d2e` short flag incompatibility |
-| `src/bootstrap/state.ts` | Added missing `isReplBridgeActive()` export |
-| `src/types/connectorText.ts` | Added `isConnectorTextBlock` function stub |
-| `src/tools/WorkflowTool/constants.ts` | Added `WORKFLOW_TOOL_NAME` export |
-| `node_modules/bundle/` | Runtime polyfill for `bun:bundle` feature flag system |
+> 本仓库是基于 2026-03-31 泄露的 Claude Code 源码进行的修复版本。
+> **修复内容**：补全了所有缺失的构建配置、Stub 桩代码、Native 依赖模拟，并修正了 Windows 环境下的运行 Bug。
 
 ---
 
-## Quick Start
+## 🚀 快速开始
 
-### Prerequisites
+任何人拿到此仓库，只需以下几步即可在 Windows 上运行：
 
-- [Bun](https://bun.sh) >= 1.3.x
-- Valid Anthropic authentication (OAuth via `claude login` or `ANTHROPIC_API_KEY`)
+### 1. 安装 Bun 运行时
+项目高度依赖 [Bun](https://bun.sh)。在 PowerShell 中运行：
+```powershell
+powershell -c "irm bun.sh/install.ps1 | iex"
+```
 
-### Install & Build
-
-```bash
-git clone https://github.com/beita6969/claude-code.git
+### 2. 下载并安装依赖
+```powershell
+git clone <你的仓库地址>
 cd claude-code
-
-# Install dependencies
-bun install
-
-# Build (produces dist/main.js, ~20MB)
-bun build src/main.tsx --outdir=dist --target=bun
+bun install --ignore-scripts
 ```
 
-### Run
+### 3. 构建与运行
+```powershell
+# 构建正式版 (生成 dist/main.js)
+bun run build
 
-```bash
-# Headless print mode (no TTY needed)
-bun src/main.tsx -p "your prompt here" --output-format text
-
-# JSON output
-bun src/main.tsx -p "your prompt here" --output-format json
-
-# Interactive REPL mode (needs TTY)
-bun src/main.tsx
-```
-
-> **Note**: If `ANTHROPIC_API_KEY` is set in your environment, it must be valid. To use OAuth instead, unset it:
-> ```bash
-> unset ANTHROPIC_API_KEY
-> ```
-
----
-
-## Architecture Overview
-
-```
-src/
-├── main.tsx              # CLI entrypoint (Commander.js + React/Ink)
-├── QueryEngine.ts        # Core LLM API engine
-├── query.ts              # Agentic loop (async generator)
-├── Tool.ts               # Tool type definitions
-├── tools.ts              # Tool registry
-├── commands.ts           # Command registry
-├── context.ts            # System prompt context
-│
-├── tools/                # 40+ tool implementations
-│   ├── AgentTool/        # Sub-agent spawning & coordination
-│   ├── BashTool/         # Shell command execution
-│   ├── FileReadTool/     # File reading
-│   ├── FileEditTool/     # File editing
-│   ├── GrepTool/         # ripgrep-based search
-│   ├── MCPTool/          # MCP server tool invocation
-│   ├── SkillTool/        # Skill execution
-│   └── ...
-│
-├── services/             # External integrations
-│   ├── api/              # Anthropic API client
-│   ├── mcp/              # MCP server management
-│   └── ...
-│
-├── memdir/               # Persistent memory system
-├── skills/               # Skill system (bundled + user)
-├── components/           # React/Ink terminal UI
-├── hooks/                # React hooks
-├── coordinator/          # Multi-agent orchestration
-└── stubs/                # Stub packages for missing internals
-```
-
-### Key Systems
-
-| System | Files | Description |
-|--------|-------|-------------|
-| **Agentic Loop** | `query.ts`, `QueryEngine.ts` | `while(true)` async generator: query -> tool calls -> results -> loop |
-| **Memory** | `memdir/` | 4-type file-based memory (user/feedback/project/reference) with MEMORY.md index |
-| **MCP** | `services/mcp/` | Model Context Protocol server management (stdio/http/sse/ws) |
-| **Skills** | `skills/`, `tools/SkillTool/` | Reusable workflow templates (SKILL.md format) |
-| **Agents** | `tools/AgentTool/` | Custom agent types via `.claude/agents/*.md` |
-| **System Prompt** | `constants/prompts.ts` | Layered prompt: static -> dynamic -> memory -> agent |
-
-### Extension Points (No Source Modification Needed)
-
-| Mechanism | Location | Format |
-|-----------|----------|--------|
-| Custom Skills | `.claude/skills/name/SKILL.md` | YAML frontmatter + Markdown |
-| Custom Agents | `.claude/agents/name.md` | YAML frontmatter + Markdown |
-| MCP Servers | `.mcp.json` | JSON config |
-| Hooks | `~/.claude/settings.json` | JSON event-action mappings |
-
----
-
-## Feature Flags
-
-The `bun:bundle` `feature()` function controls feature gating. In this build, all features default to **disabled**. To enable features, edit `node_modules/bundle/index.js`:
-
-```javascript
-const ENABLED_FEATURES = new Set([
-  // Uncomment to enable:
-  // 'KAIROS',              // Assistant mode
-  // 'PROACTIVE',           // Proactive mode
-  // 'BRIDGE_MODE',         // IDE bridge
-  // 'VOICE_MODE',          // Voice input
-  // 'COORDINATOR_MODE',    // Multi-agent coordinator
-  // 'EXTRACT_MEMORIES',    // Background memory extraction
-  // 'TEAMMEM',             // Team memory
-])
+# 启动开发版交互界面
+bun run dev
 ```
 
 ---
 
-## Tech Stack
+## 🛠️ 已修复的关键问题 (拿来即用)
 
-| Layer | Technology |
-|-------|-----------|
-| Runtime | Bun |
-| Language | TypeScript (strict) |
-| Terminal UI | React + Ink |
-| CLI | Commander.js |
-| Validation | Zod v4 |
-| Search | ripgrep |
-| Protocols | MCP SDK, LSP |
-| API | Anthropic SDK |
-| Telemetry | OpenTelemetry |
+为了确保“拿来即用”，本版本已预先完成了以下修复：
+
+1.  **ColorDiff 崩溃修复**: 补全了 `src/stubs/ant-packages/color-diff-napi/index.js` 中的 `render` 方法，解决了 UI 渲染时的 `is not a function` 报错。
+2.  **全局宏定义注入**: 在 `src/entrypoints/cli.tsx` 中自动注入了 `MACRO` 变量（版本号、构建时间等），防止运行时出现 `ReferenceError`。
+3.  **调试检测优化**: 修正了 `src/main.tsx` 中的 `isBeingDebugged` 逻辑，解决了在 Windows/Bun 环境下可能导致的静默退出问题。
+4.  **Windows 兼容性**: 优化了安装流程，避开了由于缺失 Bash 环境导致的 `postinstall` 脚本错误。
 
 ---
 
-## Scale
+## ⚠️ 注意事项 (网络与 API)
 
-- **~1,900 source files**
-- **512,000+ lines of TypeScript**
-- **40+ tools**, **100+ commands**, **140+ UI components**
-- **20MB** compiled bundle
+-   **API Key**: 运行前请确保已设置环境变量 `ANTHROPIC_API_KEY`。
+-   **网络代理**: 如果你在国内环境运行，启动时若提示 `Unable to connect to Anthropic services`，请在终端设置代理：
+    ```powershell
+    $env:HTTP_PROXY="http://127.0.0.1:您的代理端口"
+    $env:HTTPS_PROXY="http://127.0.0.1:您的代理端口"
+    ```
+-   **强制跳过网络检查**: 如果需要彻底跳过启动时的域名预检，可修改 `src/utils/preflightChecks.tsx`，让 `checkEndpoints` 直接返回 `success: true`。
 
 ---
 
-## Disclaimer
+## 📂 项目结构概览
 
-- This repository is for **educational and research purposes only**.
-- The original Claude Code source is the property of **Anthropic**.
-- This repository is **not affiliated with, endorsed by, or maintained by Anthropic**.
-- Original source exposure: 2026-03-31 via npm source map leak.
+-   `src/entrypoints/cli.tsx`: 真正的 CLI 入口，处理环境初始化。
+-   `src/main.tsx`: 核心业务逻辑与 Agent 循环。
+-   `src/stubs/`: 存放所有缺失依赖的模拟实现（Stub）。
+-   `BUILD_GUIDE.md`: 更详细的底层修改记录。
+
+---
+**免责声明**: 本项目仅供安全研究与教育目的使用。

@@ -16,7 +16,7 @@ if (typeof globalThis.MACRO === 'undefined') {
 // 2. startMdmRawRead fires MDM subprocesses (plutil/reg query) so they run in
 //    parallel with the remaining ~135ms of imports below
 // 3. startKeychainPrefetch fires both macOS keychain reads (OAuth + legacy API
-//    key) in parallel — isRemoteManagedSettingsEligible() otherwise reads them
+//    key) in parallel �?isRemoteManagedSettingsEligible() otherwise reads them
 //    sequentially via sync spawn inside applySafeConfigEnvironmentVariables()
 //    (~65ms on every macOS startup)
 import { profileCheckpoint, profileReport } from './utils/startupProfiler.js';
@@ -244,34 +244,20 @@ function logManagedSettings(): void {
 // Check if running in debug/inspection mode
 function isBeingDebugged() {
   const isBun = isRunningWithBun();
-
-  // Check for inspect flags in process arguments (including all variants)
   const hasInspectArg = process.execArgv.some(arg => {
     if (isBun) {
-      // Note: Bun has an issue with single-file executables where application arguments
-      // from process.argv leak into process.execArgv (similar to https://github.com/oven-sh/bun/issues/11673)
-      // This breaks use of --debug mode if we omit this branch
-      // We're fine to skip that check, because Bun doesn't support Node.js legacy --debug or --debug-brk flags
       return /--inspect(-brk)?/.test(arg);
     } else {
-      // In Node.js, check for both --inspect and legacy --debug flags
       return /--inspect(-brk)?|--debug(-brk)?/.test(arg);
     }
   });
-
-  // Check if NODE_OPTIONS contains inspect flags
   const hasInspectEnv = process.env.NODE_OPTIONS && /--inspect(-brk)?|--debug(-brk)?/.test(process.env.NODE_OPTIONS);
-
-  // Check if inspector is available and active (indicates debugging)
   try {
-    // Dynamic import would be better but is async - use global object instead
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const inspector = (global as any).require('inspector');
-    const hasInspectorUrl = !!inspector.url();
-    return hasInspectorUrl || hasInspectArg || hasInspectEnv;
+    const inspector = (global as any).require ? (global as any).require('inspector') : null;
+    const hasInspectorUrl = inspector ? !!inspector.url() : false;
+    return hasInspectorUrl || hasInspectArg || !!hasInspectEnv;
   } catch {
-    // Ignore error and fall back to argument detection
-    return hasInspectArg || hasInspectEnv;
+    return hasInspectArg || !!hasInspectEnv;
   }
 }
 
@@ -285,7 +271,7 @@ if ("external" !== 'ant' && isBeingDebugged()) {
 
 /**
  * Per-session skill/plugin telemetry. Called from both the interactive path
- * and the headless -p path (before runHeadless) — both go through
+ * and the headless -p path (before runHeadless) �?both go through
  * main.tsx but branch before the interactive startup path, so it needs two
  * call sites here rather than one here + one in QueryEngine.
  */
@@ -407,7 +393,7 @@ export function startDeferredPrefetches(): void {
   // --bare: skip ALL prefetches. These are cache-warms for the REPL's
   // first-turn responsiveness (initUser, getUserContext, tips, countFiles,
   // modelCapabilities, change detectors). Scripted -p calls don't have a
-  // "user is typing" window to hide this work in — it's pure overhead on
+  // "user is typing" window to hide this work in �?it's pure overhead on
   // the critical path.
   isBareMode()) {
     return;
@@ -437,7 +423,7 @@ export function startDeferredPrefetches(): void {
     void skillChangeDetector.initialize();
   }
 
-  // Event loop stall detector — logs when the main thread is blocked >500ms
+  // Event loop stall detector �?logs when the main thread is blocked >500ms
   if ("external" === 'ant') {
     void import('./utils/eventLoopStallDetector.js').then(m => m.startEventLoopStallDetector());
   }
@@ -574,7 +560,7 @@ const _pendingAssistantChat: PendingAssistantChat | undefined = feature('KAIROS'
   discover: false
 } : undefined;
 
-// `claude ssh <host> [dir]` — parsed from argv early (same pattern as
+// `claude ssh <host> [dir]` �?parsed from argv early (same pattern as
 // DIRECT_CONNECT above) so the main command path can pick it up and hand
 // the REPL an SSH-backed session instead of a local one.
 type PendingSSH = {
@@ -619,7 +605,7 @@ export async function main() {
   });
   profileCheckpoint('main_warning_handler_initialized');
 
-  // Check for cc:// or cc+unix:// URL in argv — rewrite so the main command
+  // Check for cc:// or cc+unix:// URL in argv �?rewrite so the main command
   // handles it, giving the full interactive TUI instead of a stripped-down subcommand.
   // For headless (-p), we rewrite to the internal `open` subcommand.
   if (feature('DIRECT_CONNECT')) {
@@ -654,7 +640,7 @@ export async function main() {
     }
   }
 
-  // Handle deep link URIs early — this is invoked by the OS protocol handler
+  // Handle deep link URIs early �?this is invoked by the OS protocol handler
   // and should bail out before full init since it only needs to parse the URI
   // and open a terminal.
   if (feature('LODESTONE')) {
@@ -675,7 +661,7 @@ export async function main() {
     // macOS URL handler: when LaunchServices launches our .app bundle, the
     // URL arrives via Apple Event (not argv). LaunchServices overwrites
     // __CFBundleIdentifier to the launching bundle's ID, which is a precise
-    // positive signal — cheaper than importing and guessing with heuristics.
+    // positive signal �?cheaper than importing and guessing with heuristics.
     if (process.platform === 'darwin' && process.env.__CFBundleIdentifier === 'com.anthropic.claude-code-url-handler') {
       const {
         enableConfigs
@@ -689,9 +675,9 @@ export async function main() {
     }
   }
 
-  // `claude assistant [sessionId]` — stash and strip so the main
+  // `claude assistant [sessionId]` �?stash and strip so the main
   // command handles it, giving the full interactive TUI. Position-0 only
-  // (matching the ssh pattern below) — indexOf would false-positive on
+  // (matching the ssh pattern below) �?indexOf would false-positive on
   // `claude -p "explain assistant"`. Root-flag-before-subcommand
   // (e.g. `--debug assistant`) falls through to the stub, which
   // prints usage.
@@ -708,18 +694,18 @@ export async function main() {
         rawArgs.splice(0, 1); // drop 'assistant'
         process.argv = [process.argv[0]!, process.argv[1]!, ...rawArgs];
       }
-      // else: `claude assistant --help` → fall through to stub
+      // else: `claude assistant --help` �?fall through to stub
     }
   }
 
-  // `claude ssh <host> [dir]` — strip from argv so the main command handler
+  // `claude ssh <host> [dir]` �?strip from argv so the main command handler
   // runs (full interactive TUI), stash the host/dir for the REPL branch at
   // ~line 3720 to pick up. Headless (-p) mode not supported in v1: SSH
   // sessions need the local REPL to drive them (interrupt, permissions).
   if (feature('SSH_REMOTE') && _pendingSSH) {
     const rawCliArgs = process.argv.slice(2);
     // SSH-specific flags can appear before the host positional (e.g.
-    // `ssh --permission-mode auto host /tmp` — standard POSIX flags-before-
+    // `ssh --permission-mode auto host /tmp` �?standard POSIX flags-before-
     // positionals). Pull them all out BEFORE checking whether a host was
     // given, so `claude ssh --permission-mode auto host` and `claude ssh host
     // --permission-mode auto` are equivalent. The host check below only needs
@@ -794,7 +780,7 @@ export async function main() {
       }
       const rest = rawCliArgs.slice(consumed);
 
-      // Headless (-p) mode is not supported with SSH in v1 — reject early
+      // Headless (-p) mode is not supported with SSH in v1 �?reject early
       // so the flag doesn't silently cause local execution.
       if (rest.includes('-p') || rest.includes('--print')) {
         process.stderr.write('Error: headless (-p/--print) mode is not supported with claude ssh\n');
@@ -850,7 +836,7 @@ export async function main() {
     setQuestionPreviewFormat(previewFormat);
   } else if (!clientType.startsWith('sdk-') &&
   // Desktop and CCR pass previewFormat via toolConfig; when the feature is
-  // gated off they pass undefined — don't override that with markdown.
+  // gated off they pass undefined �?don't override that with markdown.
   clientType !== 'claude-desktop' && clientType !== 'local-agent' && clientType !== 'remote') {
     setQuestionPreviewFormat('markdown');
   }
@@ -920,10 +906,10 @@ async function run(): Promise<CommanderCommand> {
   program.hook('preAction', async thisCommand => {
     profileCheckpoint('preAction_start');
     // Await async subprocess loads started at module evaluation (lines 12-20).
-    // Nearly free — subprocesses complete during the ~135ms of imports above.
+    // Nearly free �?subprocesses complete during the ~135ms of imports above.
     // Must resolve before init() which triggers the first settings read
-    // (applySafeConfigEnvironmentVariables → getSettingsForSource('policySettings')
-    // → isRemoteManagedSettingsEligible → sync keychain reads otherwise ~65ms).
+    // (applySafeConfigEnvironmentVariables �?getSettingsForSource('policySettings')
+    // �?isRemoteManagedSettingsEligible �?sync keychain reads otherwise ~65ms).
     await Promise.all([ensureMdmSettingsLoaded(), ensureKeychainPrefetchCompleted()]);
     profileCheckpoint('preAction_after_mdm');
     await init();
@@ -952,7 +938,7 @@ async function run(): Promise<CommanderCommand> {
     // (plugin list, plugin install, mcp *) have their own actions and
     // never see it. Wire it up here so getInlinePlugins() works everywhere.
     // thisCommand.opts() is typed {} here because this hook is attached
-    // before .option('--plugin-dir', ...) in the chain — extra-typings
+    // before .option('--plugin-dir', ...) in the chain �?extra-typings
     // builds the type as options are added. Narrow with a runtime guard;
     // the collect accumulator + [] default guarantee string[] in practice.
     const pluginDir = thisCommand.getOptionValue('pluginDir');
@@ -979,7 +965,7 @@ async function run(): Promise<CommanderCommand> {
     profileCheckpoint('preAction_after_settings_sync');
   });
   program.name('claude').description(`Claude Code - starts an interactive session by default, use -p/--print for non-interactive output`).argument('[prompt]', 'Your prompt', String)
-  // Subcommands inherit helpOption via commander's copyInheritedSettings —
+  // Subcommands inherit helpOption via commander's copyInheritedSettings �?
   // setting it once here covers mcp, plugin, auth, and all other subcommands.
   .helpOption('-h, --help', 'Display help for command').option('-d, --debug [filter]', 'Enable debug mode with optional category filtering (e.g., "api,hooks" or "!1p,!file")', (_value: string | true) => {
     // If value is provided, it will be the filter string
@@ -1045,7 +1031,7 @@ async function run(): Promise<CommanderCommand> {
 
     // Assistant mode: when .claude/settings.json has assistant: true AND
     // the tengu_kairos GrowthBook gate is on, force brief on. Permission
-    // mode is left to the user — settings defaultMode or --permission-mode
+    // mode is left to the user �?settings defaultMode or --permission-mode
     // apply as normal. REPL-typed messages already default to 'next'
     // priority (messageQueueManager.enqueue) so they drain mid-turn between
     // tool calls. SendUserMessage (BriefTool) is enabled via the brief env
@@ -1065,14 +1051,14 @@ async function run(): Promise<CommanderCommand> {
     }).assistant && assistantModule) {
       // --assistant (Agent SDK daemon mode): force the latch before
       // isAssistantMode() runs below. The daemon has already checked
-      // entitlement — don't make the child re-check tengu_kairos.
+      // entitlement �?don't make the child re-check tengu_kairos.
       assistantModule.markAssistantForced();
     }
     if (feature('KAIROS') && assistantModule?.isAssistantMode() &&
     // Spawned teammates share the leader's cwd + settings.json, so
     // isAssistantMode() is true for them too. --agent-id being set
     // means we ARE a spawned teammate (extractTeammateOptions runs
-    // ~170 lines later so check the raw commander option) — don't
+    // ~170 lines later so check the raw commander option) �?don't
     // re-init the team or override teammateMode/proactive/brief.
     !(options as {
       agentId?: unknown;
@@ -1081,7 +1067,7 @@ async function run(): Promise<CommanderCommand> {
         // biome-ignore lint/suspicious/noConsole:: intentional console output
         console.warn(chalk.yellow('Assistant mode disabled: directory is not trusted. Accept the trust dialog and restart.'));
       } else {
-        // Blocking gate check — returns cached `true` instantly; if disk
+        // Blocking gate check �?returns cached `true` instantly; if disk
         // cache is false/missing, lazily inits GrowthBook and fetches fresh
         // (max ~5s). --assistant skips the gate entirely (daemon is
         // pre-entitled).
@@ -1482,7 +1468,7 @@ async function run(): Promise<CommanderCommand> {
       }
       if (Object.keys(allConfigs).length > 0) {
         // SDK hosts (Nest/Desktop) own their server naming and may reuse
-        // built-in names — skip reserved-name checks for type:'sdk'.
+        // built-in names �?skip reserved-name checks for type:'sdk'.
         const nonSdkConfigNames = Object.entries(allConfigs).filter(([, config]) => config.type !== 'sdk').map(([name]) => name);
         let reservedNameError: string | null = null;
         if (nonSdkConfigNames.some(isClaudeInChromeMCPServer)) {
@@ -1497,14 +1483,14 @@ async function run(): Promise<CommanderCommand> {
           }
         }
         if (reservedNameError) {
-          // stderr+exit(1) — a throw here becomes a silent unhandled
+          // stderr+exit(1) �?a throw here becomes a silent unhandled
           // rejection in stream-json mode (void main() in cli.tsx).
           process.stderr.write(`Error: ${reservedNameError}\n`);
           process.exit(1);
         }
 
         // Add dynamic scope to all configs. type:'sdk' entries pass through
-        // unchanged — they're extracted into sdkMcpConfigs downstream and
+        // unchanged �?they're extracted into sdkMcpConfigs downstream and
         // passed to print.ts. The Python SDK relies on this path (it doesn't
         // send sdkMcpServers in the initialize message). Dropping them here
         // broke Coworker (inc-5122). The policy filter below already exempts
@@ -1518,7 +1504,7 @@ async function run(): Promise<CommanderCommand> {
         // Enforce managed policy (allowedMcpServers / deniedMcpServers) on
         // --mcp-config servers. Without this, the CLI flag bypasses the
         // enterprise allowlist that user/project/local configs go through in
-        // getClaudeCodeMcpConfigs — callers spread dynamicMcpConfig back on
+        // getClaudeCodeMcpConfigs �?callers spread dynamicMcpConfig back on
         // top of filtered results. Filter here at the source so all
         // downstream consumers see the policy-filtered set.
         const {
@@ -1608,7 +1594,7 @@ async function run(): Promise<CommanderCommand> {
     }
 
     // chicago MCP: guarded Computer Use (app allowlist + frontmost gate +
-    // SCContentFilter screenshots). Ant-only, GrowthBook-gated — failures
+    // SCContentFilter screenshots). Ant-only, GrowthBook-gated �?failures
     // are silent (this is dogfooding). Platform + interactive checks inline
     // so non-macOS / print-mode ants skip the heavy @ant/computer-use-mcp
     // import entirely. gates.js is light (type-only package import).
@@ -1645,10 +1631,10 @@ async function run(): Promise<CommanderCommand> {
     // Store additional directories for CLAUDE.md loading (controlled by env var)
     setAdditionalDirectoriesForClaudeMd(addDir);
 
-    // Channel server allowlist from --channels flag — servers whose
+    // Channel server allowlist from --channels flag �?servers whose
     // inbound push notifications should register this session. The option
     // is added inside a feature() block so TS doesn't know about it
-    // on the options type — same pattern as --assistant at main.tsx:1824.
+    // on the options type �?same pattern as --assistant at main.tsx:1824.
     // devChannels is deferred: showSetupScreens shows a confirmation dialog
     // and only appends to allowedChannels on accept.
     let devChannels: ChannelEntry[] | undefined;
@@ -1657,7 +1643,7 @@ async function run(): Promise<CommanderCommand> {
       // Tag decides trust model downstream: plugin-kind hits marketplace
       // verification + GrowthBook allowlist, server-kind always fails
       // allowlist (schema is plugin-only) unless dev flag is set.
-      // Untagged or marketplace-less plugin entries are hard errors —
+      // Untagged or marketplace-less plugin entries are hard errors �?
       // silently not-matching in the gate would look like channels are
       // "on" but nothing ever fires.
       const parseChannelEntries = (raw: string[], flag: string): ChannelEntry[] => {
@@ -1686,7 +1672,7 @@ async function run(): Promise<CommanderCommand> {
           }
         }
         if (bad.length > 0) {
-          process.stderr.write(chalk.red(`${flag} entries must be tagged: ${bad.join(', ')}\n` + `  plugin:<name>@<marketplace>  — plugin-provided channel (allowlist enforced)\n` + `  server:<name>                — manually configured MCP server\n`));
+          process.stderr.write(chalk.red(`${flag} entries must be tagged: ${bad.join(', ')}\n` + `  plugin:<name>@<marketplace>  �?plugin-provided channel (allowlist enforced)\n` + `  server:<name>                �?manually configured MCP server\n`));
           process.exit(1);
         }
         return entries;
@@ -1713,11 +1699,11 @@ async function run(): Promise<CommanderCommand> {
         }
       }
       // Flag-usage telemetry. Plugin identifiers are logged (same tier as
-      // tengu_plugin_installed — public-registry-style names); server-kind
+      // tengu_plugin_installed �?public-registry-style names); server-kind
       // names are not (MCP-server-name tier, opt-in-only elsewhere).
       // Per-server gate outcomes land in tengu_mcp_channel_gate once
       // servers connect. Dev entries go through a confirmation dialog after
-      // this — dev_plugins captures what was typed, not what was accepted.
+      // this �?dev_plugins captures what was typed, not what was accepted.
       if (channelEntries.length > 0 || (devChannels?.length ?? 0) > 0) {
         const joinPluginIds = (entries: ChannelEntry[]) => {
           const ids = entries.flatMap(e => e.kind === 'plugin' ? [`${e.name}@${e.marketplace}`] : []);
@@ -1796,7 +1782,7 @@ async function run(): Promise<CommanderCommand> {
     // enterprise/strict MCP to preserve policy boundaries.
     const claudeaiConfigPromise: Promise<Record<string, ScopedMcpServerConfig>> = isNonInteractiveSession && !strictMcpConfig && !doesEnterpriseMcpConfigExist() &&
     // --bare / SIMPLE: skip claude.ai proxy servers (datadog, Gmail,
-    // Slack, BigQuery, PubMed — 6-14s each to connect). Scripted calls
+    // Slack, BigQuery, PubMed �?6-14s each to connect). Scripted calls
     // that need MCP pass --mcp-config explicitly.
     !isBareMode() ? fetchClaudeAIMcpConfigsIfEligible().then(configs => {
       const {
@@ -1816,7 +1802,7 @@ async function run(): Promise<CommanderCommand> {
     logForDebugging('[STARTUP] Loading MCP configs...');
     const mcpConfigStart = Date.now();
     let mcpConfigResolvedMs: number | undefined;
-    // --bare skips auto-discovered MCP (.mcp.json, user settings, plugins) —
+    // --bare skips auto-discovered MCP (.mcp.json, user settings, plugins) �?
     // only explicit --mcp-config works. dynamicMcpConfig is spread onto
     // allMcpConfigs downstream so it survives this skip.
     const mcpConfigPromise = (strictMcpConfig || isBareMode() ? Promise.resolve({
@@ -1924,12 +1910,12 @@ async function run(): Promise<CommanderCommand> {
       messagingSocketPath?: string;
     }).messagingSocketPath : undefined;
     // Parallelize setup() with commands+agents loading. setup()'s ~28ms is
-    // mostly startUdsMessaging (socket bind, ~20ms) — not disk-bound, so it
+    // mostly startUdsMessaging (socket bind, ~20ms) �?not disk-bound, so it
     // doesn't contend with getCommands' file reads. Gated on !worktreeEnabled
     // since --worktree makes setup() process.chdir() (setup.ts:203), and
     // commands/agents need the post-chdir cwd.
     const preSetupCwd = getCwd();
-    // Register bundled skills/plugins before kicking getCommands() — they're
+    // Register bundled skills/plugins before kicking getCommands() �?they're
     // pure in-memory array pushes (<1ms, zero I/O) that getBundledSkills()
     // reads synchronously. Previously ran inside setup() after ~20ms of
     // await points, so the parallel getCommands() memoized an empty list.
@@ -1949,7 +1935,7 @@ async function run(): Promise<CommanderCommand> {
     profileCheckpoint('action_after_setup');
 
     // Replay user messages into stream-json only when the socket was
-    // explicitly requested. The auto-generated socket is passive — it
+    // explicitly requested. The auto-generated socket is passive �?it
     // lets tools inject if they want to, but turning it on by default
     // shouldn't reshape stream-json for SDK consumers who never touch it.
     // Callers who inject and also want those injections visible in the
@@ -1988,13 +1974,13 @@ async function run(): Promise<CommanderCommand> {
       // getCommands Promise.all await below. Trust is implicit in -p mode
       // (same gate as prefetchSystemContextIfSafe).
       void getSystemContext();
-      // Kick getUserContext now too — its first await (fs.readFile in
+      // Kick getUserContext now too �?its first await (fs.readFile in
       // getMemoryFiles) yields naturally, so the CLAUDE.md directory walk
       // runs during the ~280ms overlap window before the context
       // Promise.all join in print.ts. The void getUserContext() in
       // startDeferredPrefetches becomes a memoize cache-hit.
       void getUserContext();
-      // Kick ensureModelStringsInitialized now — for Bedrock this triggers
+      // Kick ensureModelStringsInitialized now �?for Bedrock this triggers
       // a 100-200ms profile fetch that was awaited serially at
       // print.ts:739. updateBedrockModelStrings is sequential()-wrapped so
       // the await joins the in-flight fetch. Non-Bedrock is a sync
@@ -2015,7 +2001,7 @@ async function run(): Promise<CommanderCommand> {
     // tengu_ant_model_override GrowthBook flag. _CACHED_MAY_BE_STALE reads
     // disk synchronously; disk is populated by a fire-and-forget write. On a
     // cold cache, parseUserSpecifiedModel returns the unresolved alias, the
-    // API 404s, and -p exits before the async write lands — crashloop on
+    // API 404s, and -p exits before the async write lands �?crashloop on
     // fresh pods. Awaiting init here populates the in-memory payload map that
     // _CACHED_MAY_BE_STALE now checks first. Gated so the warm path stays
     // non-blocking:
@@ -2077,7 +2063,7 @@ async function run(): Promise<CommanderCommand> {
     // Store the main thread agent type in bootstrap state so hooks can access it
     setMainThreadAgentType(mainThreadAgentDefinition?.agentType);
 
-    // Log agent flag usage — only log agent name for built-in agents to avoid leaking custom agent names
+    // Log agent flag usage �?only log agent name for built-in agents to avoid leaking custom agent names
     if (mainThreadAgentDefinition) {
       logEvent('tengu_agent_flag', {
         agentType: isBuiltInAgent(mainThreadAgentDefinition) ? mainThreadAgentDefinition.agentType as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS : 'custom' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
@@ -2185,7 +2171,7 @@ async function run(): Promise<CommanderCommand> {
       }
     }
     maybeActivateBrief(options);
-    // defaultView: 'chat' is a persisted opt-in — check entitlement and set
+    // defaultView: 'chat' is a persisted opt-in �?check entitlement and set
     // userMsgOptIn so the tool + prompt section activate. Interactive-only:
     // defaultView is a display preference; SDK sessions have no display, and
     // the assistant installer writes defaultView:'chat' to settings.local.json
@@ -2213,7 +2199,7 @@ async function run(): Promise<CommanderCommand> {
       /* eslint-disable @typescript-eslint/no-require-imports */
       const briefVisibility = feature('KAIROS') || feature('KAIROS_BRIEF') ? (require('./tools/BriefTool/BriefTool.js') as typeof import('./tools/BriefTool/BriefTool.js')).isBriefEnabled() ? 'Call SendUserMessage at checkpoints to mark where things stand.' : 'The user will see any text you output.' : 'The user will see any text you output.';
       /* eslint-enable @typescript-eslint/no-require-imports */
-      const proactivePrompt = `\n# Proactive Mode\n\nYou are in proactive mode. Take initiative — explore, act, and make progress without waiting for instructions.\n\nStart by briefly greeting the user.\n\nYou will receive periodic <tick> prompts. These are check-ins. Do whatever seems most useful, or call Sleep if there's nothing to do. ${briefVisibility}`;
+      const proactivePrompt = `\n# Proactive Mode\n\nYou are in proactive mode. Take initiative �?explore, act, and make progress without waiting for instructions.\n\nStart by briefly greeting the user.\n\nYou will receive periodic <tick> prompts. These are check-ins. Do whatever seems most useful, or call Sleep if there's nothing to do. ${briefVisibility}`;
       appendSystemPrompt = appendSystemPrompt ? `${appendSystemPrompt}\n\n${proactivePrompt}` : proactivePrompt;
     }
     if (feature('KAIROS') && kairosEnabled && assistantModule) {
@@ -2221,7 +2207,7 @@ async function run(): Promise<CommanderCommand> {
       appendSystemPrompt = appendSystemPrompt ? `${appendSystemPrompt}\n\n${assistantAddendum}` : assistantAddendum;
     }
 
-    // Ink root is only needed for interactive sessions — patchConsole in the
+    // Ink root is only needed for interactive sessions �?patchConsole in the
     // Ink constructor would swallow console output in headless mode.
     let root!: Root;
     let getFpsMetrics!: () => FpsMetrics | undefined;
@@ -2243,7 +2229,7 @@ async function run(): Promise<CommanderCommand> {
 
       // Log startup time now, before any blocking dialog renders. Logging
       // from REPL's first render (the old location) included however long
-      // the user sat on trust/OAuth/onboarding/resume-picker — p99 was ~70s
+      // the user sat on trust/OAuth/onboarding/resume-picker �?p99 was ~70s
       // dominated by dialog-wait time, not code-path startup.
       logEvent('tengu_timer', {
         event: 'startup' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
@@ -2300,7 +2286,7 @@ async function run(): Promise<CommanderCommand> {
         refreshGrowthBookAfterAuthChange();
         // Clear any stale trusted device token then enroll for Remote Control.
         // Both self-gate on tengu_sessions_elevated_auth_enforcement internally
-        // — enrollTrustedDevice() via checkGate_CACHED_OR_BLOCKING (awaits
+        // �?enrollTrustedDevice() via checkGate_CACHED_OR_BLOCKING (awaits
         // the GrowthBook reinit above), clearTrustedDeviceToken() via the
         // sync cached check (acceptable since clear is idempotent).
         void import('./bridge/trustedDevice.js').then(m => {
@@ -2351,7 +2337,7 @@ async function run(): Promise<CommanderCommand> {
     // Check quota status, fast mode, passes eligibility, and bootstrap data
     // after trust is established. These make API calls which could trigger
     // apiKeyHelper execution.
-    // --bare / SIMPLE: skip — these are cache-warms for the REPL's
+    // --bare / SIMPLE: skip �?these are cache-warms for the REPL's
     // first-turn responsiveness (quota, passes, fastMode, bootstrap data). Fast
     // mode doesn't apply to the Agent SDK anyway (see getFastModeUnavailableReason).
     const bgRefreshThrottleMs = getFeatureValue_CACHED_MAY_BE_STALE('tengu_cicada_nap_ms', 0);
@@ -2445,7 +2431,7 @@ async function run(): Promise<CommanderCommand> {
     // Start hooks early so they run in parallel with MCP connections.
     // Skip for initOnly/init/maintenance (handled separately), non-interactive
     // (handled via setupTrigger), and resume/continue (conversationRecovery.ts
-    // fires 'resume' instead — without this guard, hooks fire TWICE on /resume
+    // fires 'resume' instead �?without this guard, hooks fire TWICE on /resume
     // and the second systemMessage clobbers the first. gh-30825)
     const hooksPromise = initOnly || init || maintenance || isNonInteractiveSession || options.continue || options.resume ? null : processSessionStartHooks('startup', {
       agentType: mainThreadAgentDefinition?.agentType,
@@ -2454,13 +2440,13 @@ async function run(): Promise<CommanderCommand> {
 
     // MCP never blocks REPL render OR turn 1 TTFT. useManageMCPConnections
     // populates appState.mcp async as servers connect (connectToServer is
-    // memoized — the prefetch calls above and the hook converge on the same
+    // memoized �?the prefetch calls above and the hook converge on the same
     // connections). getToolUseContext reads store.getState() fresh via
     // computeTools(), so turn 1 sees whatever's connected by query time.
     // Slow servers populate for turn 2+. Matches interactive-no-prompt
     // behavior. Print mode: per-server push into headlessStore (below).
     const hookMessages: Awaited<NonNullable<typeof hooksPromise>> = [];
-    // Suppress transient unhandledRejection — the prefetch warms the
+    // Suppress transient unhandledRejection �?the prefetch warms the
     // memoized connectToServer cache but nobody awaits it in interactive.
     mcpPromise.catch(() => {});
     const mcpClients: Awaited<typeof mcpPromise>['clients'] = [];
@@ -2538,7 +2524,7 @@ async function run(): Promise<CommanderCommand> {
 
     // Register PID file for concurrent-session detection (~/.claude/sessions/)
     // and fire multi-clauding telemetry. Lives here (not init.ts) so only the
-    // REPL path registers — not subcommands like `claude doctor`. Chained:
+    // REPL path registers �?not subcommands like `claude doctor`. Chained:
     // count must run after register's write completes or it misses our own file.
     void registerSession().then(registered => {
       if (!registered) return;
@@ -2562,18 +2548,18 @@ async function run(): Promise<CommanderCommand> {
     // warm also lands before autoupdate (fires on first submit in REPL)
     // can orphan this session's active version underneath us.
     // --bare / SIMPLE: skip plugin version sync + orphan cleanup. These
-    // are install/upgrade bookkeeping that scripted calls don't need —
+    // are install/upgrade bookkeeping that scripted calls don't need �?
     // the next interactive session will reconcile. The await here was
     // blocking -p on a marketplace round-trip.
     if (isBareMode()) {
-      // skip — no-op
+      // skip �?no-op
     } else if (isNonInteractiveSession) {
       // In headless mode, await to ensure plugin sync completes before CLI exits
       await initializeVersionedPlugins();
       profileCheckpoint('action_after_plugins_init');
       void cleanupOrphanedPluginVersionsInBackground().then(() => getGlobExclusionsForPluginCache());
     } else {
-      // In interactive mode, fire-and-forget — this is purely bookkeeping
+      // In interactive mode, fire-and-forget �?this is purely bookkeeping
       // that doesn't affect runtime behavior of the current session
       void initializeVersionedPlugins().then(async () => {
         profileCheckpoint('action_after_plugins_init');
@@ -2611,16 +2597,16 @@ async function run(): Promise<CommanderCommand> {
 
       // Kick SessionStart hooks now so the subprocess spawn overlaps with
       // MCP connect + plugin init + print.ts import below. loadInitialMessages
-      // joins this at print.ts:4397. Guarded same as loadInitialMessages —
+      // joins this at print.ts:4397. Guarded same as loadInitialMessages �?
       // continue/resume/teleport paths don't fire startup hooks (or fire them
       // conditionally inside the resume branch, where this promise is
       // undefined and the ?? fallback runs). Also skip when setupTrigger is
-      // set — those paths run setup hooks first (print.ts:544), and session
+      // set �?those paths run setup hooks first (print.ts:544), and session
       // start hooks must wait until setup completes.
       const sessionStartHooksPromise = options.continue || options.resume || teleport || setupTrigger ? undefined : processSessionStartHooks('startup');
       // Suppress transient unhandledRejection if this rejects before
       // loadInitialMessages awaits it. Downstream await still observes the
-      // rejection — this just prevents the spurious global handler fire.
+      // rejection �?this just prevents the spurious global handler fire.
       sessionStartHooksPromise?.catch(() => {});
       profileCheckpoint('before_validateForceLoginOrg');
       // Validate org restriction for non-interactive sessions
@@ -2654,7 +2640,7 @@ async function run(): Promise<CommanderCommand> {
         // executeForkedSlashCommand (processSlashCommand.tsx:132) and
         // AgentTool's shouldRunAsync. The REPL initialState sets this at
         // ~3459; headless was defaulting to false, so the daemon child's
-        // scheduled tasks and Agent-tool calls ran synchronously — N
+        // scheduled tasks and Agent-tool calls ran synchronously �?N
         // overdue cron tasks on spawn = N serial subagent turns blocking
         // user input. Computed at :1620, well before this branch.
         ...(feature('KAIROS') ? {
@@ -2671,7 +2657,7 @@ async function run(): Promise<CommanderCommand> {
         void checkAndDisableBypassPermissions(toolPermissionContext);
       }
 
-      // Async check of auto mode gate — corrects state and disables auto if needed.
+      // Async check of auto mode gate �?corrects state and disables auto if needed.
       // Gated on TRANSCRIPT_CLASSIFIER (not USER_TYPE) so GrowthBook kill switch runs for external builds too.
       if (feature('TRANSCRIPT_CLASSIFIER')) {
         void verifyAutoModeGateAccess(toolPermissionContext, headlessStore.getState().fastMode).then(({
@@ -2698,7 +2684,7 @@ async function run(): Promise<CommanderCommand> {
       setSdkBetas(filterAllowedSdkBetas(betas));
 
       // Print-mode MCP: per-server incremental push into headlessStore.
-      // Mirrors useManageMCPConnections — push pending first (so ToolSearch's
+      // Mirrors useManageMCPConnections �?push pending first (so ToolSearch's
       // pending-check at ToolSearchTool.ts:334 sees them), then replace with
       // connected/failed as each server settles.
       const connectMcpBatch = (configs: Record<string, ScopedMcpServerConfig>, label: string): Promise<void> => {
@@ -2730,12 +2716,12 @@ async function run(): Promise<CommanderCommand> {
           }));
         }, configs).catch(err => logForDebugging(`[MCP] ${label} connect error: ${err}`));
       };
-      // Await all MCP configs — print mode is often single-turn, so
+      // Await all MCP configs �?print mode is often single-turn, so
       // "late-connecting servers visible next turn" doesn't help. SDK init
       // message and turn-1 tool list both need configured MCP tools present.
       // Zero-server case is free via the early return in connectMcpBatch.
       // Connectors parallelize inside getMcpToolsCommandsAndResources
-      // (processBatched with Promise.all). claude.ai is awaited too — its
+      // (processBatched with Promise.all). claude.ai is awaited too �?its
       // fetch was kicked off early (line ~2558) so only residual time blocks
       // here. --bare skips claude.ai entirely for perf-sensitive scripts.
       profileCheckpoint('before_connectMcp');
@@ -2743,7 +2729,7 @@ async function run(): Promise<CommanderCommand> {
       profileCheckpoint('after_connectMcp');
       // Dedup: suppress plugin MCP servers that duplicate a claude.ai
       // connector (connector wins), then connect claude.ai servers.
-      // Bounded wait — #23725 made this blocking so single-turn -p sees
+      // Bounded wait �?#23725 made this blocking so single-turn -p sees
       // connectors, but with 40+ slow connectors tengu_startup_perf p99
       // climbed to 76s. If fetch+connect doesn't finish in time, proceed;
       // the promise keeps running and updates headlessStore in the
@@ -2765,7 +2751,7 @@ async function run(): Promise<CommanderCommand> {
           if (suppressed.size > 0) {
             logForDebugging(`[MCP] Lazy dedup: suppressing ${suppressed.size} plugin server(s) that duplicate claude.ai connectors: ${[...suppressed].join(', ')}`);
             // Disconnect before filtering from state. Only connected
-            // servers need cleanup — clearServerCache on a never-connected
+            // servers need cleanup �?clearServerCache on a never-connected
             // server triggers a real connect just to kill it (memoize
             // cache-miss path, see useManageMCPConnections.ts:870).
             for (const c of headlessStore.getState().mcp.clients) {
@@ -2802,7 +2788,7 @@ async function run(): Promise<CommanderCommand> {
         // Suppress claude.ai connectors that duplicate an enabled
         // manual server (URL-signature match). Plugin dedup above only
         // handles `plugin:*` keys; this catches manual `.mcp.json` entries.
-        // plugin:* must be excluded here — step 1 already suppressed
+        // plugin:* must be excluded here �?step 1 already suppressed
         // those (claude.ai wins); leaving them in suppresses the
         // connector too, and neither survives (gh-39974).
         const nonPluginConfigs = pickBy(regularMcpConfigs, (_, n) => !n.startsWith('plugin:'));
@@ -2817,7 +2803,7 @@ async function run(): Promise<CommanderCommand> {
       })]);
       if (claudeaiTimer) clearTimeout(claudeaiTimer);
       if (claudeaiTimedOut) {
-        logForDebugging(`[MCP] claude.ai connectors not ready after ${CLAUDE_AI_MCP_TIMEOUT_MS}ms — proceeding; background connection continues`);
+        logForDebugging(`[MCP] claude.ai connectors not ready after ${CLAUDE_AI_MCP_TIMEOUT_MS}ms �?proceeding; background connection continues`);
       }
       profileCheckpoint('after_connectMcp_claudeai');
 
@@ -2825,7 +2811,7 @@ async function run(): Promise<CommanderCommand> {
       // --bare / SIMPLE: startDeferredPrefetches early-returns internally.
       // backgroundHousekeeping (initExtractMemories, pruneShellSnapshots,
       // cleanupOldMessageFiles) and sdkHeapDumpMonitor are all bookkeeping
-      // that scripted calls don't need — the next interactive session reconciles.
+      // that scripted calls don't need �?the next interactive session reconciles.
       if (!isBareMode()) {
         startDeferredPrefetches();
         void import('./utils/backgroundHousekeeping.js').then(m => m.startBackgroundHousekeeping());
@@ -3041,7 +3027,7 @@ async function run(): Promise<CommanderCommand> {
         advisorModel
       }),
       // Compute teamContext synchronously to avoid useEffect setState during render.
-      // KAIROS: assistantTeamContext takes precedence — set earlier in the
+      // KAIROS: assistantTeamContext takes precedence �?set earlier in the
       // KAIROS block so Agent(name: "foo") can spawn in-process teammates
       // without TeamCreate. computeInitialTeamContext() is for tmux-spawned
       // teammates reading their own identity, not the assistant-mode leader.
@@ -3054,7 +3040,7 @@ async function run(): Promise<CommanderCommand> {
     }
     const initialTools = mcpTools;
 
-    // Increment numStartups synchronously — first-render readers like
+    // Increment numStartups synchronously �?first-render readers like
     // shouldShowEffortCallout (via useState initializer) need the updated
     // value before setImmediate fires. Defer only telemetry.
     saveGlobalConfig(current => ({
@@ -3167,7 +3153,7 @@ async function run(): Promise<CommanderCommand> {
         process.exit(1);
       }
     } else if (feature('DIRECT_CONNECT') && _pendingConnect?.url) {
-      // `claude connect <url>` — full interactive TUI connected to a remote server
+      // `claude connect <url>` �?full interactive TUI connected to a remote server
       let directConnectConfig;
       try {
         const session = await createDirectConnectSession({
@@ -3204,11 +3190,11 @@ async function run(): Promise<CommanderCommand> {
       }, renderAndRun);
       return;
     } else if (feature('SSH_REMOTE') && _pendingSSH?.host) {
-      // `claude ssh <host> [dir]` — probe remote, deploy binary if needed,
+      // `claude ssh <host> [dir]` �?probe remote, deploy binary if needed,
       // spawn ssh with unix-socket -R forward to a local auth proxy, hand
       // the REPL an SSHSession. Tools run remotely, UI renders locally.
       // `--local` skips probe/deploy/ssh and spawns the current binary
-      // directly with the same env — e2e test of the proxy/auth plumbing.
+      // directly with the same env �?e2e test of the proxy/auth plumbing.
       const {
         createSSHSession,
         createLocalSSHSession,
@@ -3227,7 +3213,7 @@ async function run(): Promise<CommanderCommand> {
           process.stderr.write(`Connecting to ${_pendingSSH.host}…\n`);
           // In-place progress: \r + EL0 (erase to end of line). Final \n on
           // success so the next message lands on a fresh line. No-op when
-          // stderr isn't a TTY (piped/redirected) — \r would just emit noise.
+          // stderr isn't a TTY (piped/redirected) �?\r would just emit noise.
           const isTTY = process.stderr.isTTY;
           let hadProgress = false;
           sshSession = await createSSHSession({
@@ -3251,7 +3237,7 @@ async function run(): Promise<CommanderCommand> {
       } catch (err) {
         return await exitWithError(root, err instanceof SSHSessionError ? err.message : String(err), () => gracefulShutdown(1));
       }
-      const sshInfoMessage = createSystemMessage(_pendingSSH.local ? `Local ssh-proxy test session\ncwd: ${sshSession.remoteCwd}\nAuth: unix socket → local proxy` : `SSH session to ${_pendingSSH.host}\nRemote cwd: ${sshSession.remoteCwd}\nAuth: unix socket -R → local proxy`, 'info');
+      const sshInfoMessage = createSystemMessage(_pendingSSH.local ? `Local ssh-proxy test session\ncwd: ${sshSession.remoteCwd}\nAuth: unix socket �?local proxy` : `SSH session to ${_pendingSSH.host}\nRemote cwd: ${sshSession.remoteCwd}\nAuth: unix socket -R �?local proxy`, 'info');
       await launchRepl(root, {
         getFpsMetrics,
         stats,
@@ -3270,7 +3256,7 @@ async function run(): Promise<CommanderCommand> {
       }, renderAndRun);
       return;
     } else if (feature('KAIROS') && _pendingAssistantChat && (_pendingAssistantChat.sessionId || _pendingAssistantChat.discover)) {
-      // `claude assistant [sessionId]` — REPL as a pure viewer client
+      // `claude assistant [sessionId]` �?REPL as a pure viewer client
       // of a remote assistant session. The agentic loop runs remotely; this
       // process streams live events and POSTs messages. History is lazy-
       // loaded by useAssistantHistory on scroll-up (no blocking fetch here).
@@ -3279,7 +3265,7 @@ async function run(): Promise<CommanderCommand> {
       } = await import('./assistant/sessionDiscovery.js');
       let targetSessionId = _pendingAssistantChat.sessionId;
 
-      // Discovery flow — list bridge environments, filter sessions
+      // Discovery flow �?list bridge environments, filter sessions
       if (!targetSessionId) {
         let sessions;
         try {
@@ -3300,7 +3286,7 @@ async function run(): Promise<CommanderCommand> {
           }
           // The daemon needs a few seconds to spin up its worker and
           // establish a bridge session before discovery will find it.
-          return await exitWithMessage(root, `Assistant installed in ${installedDir}. The daemon is starting up — run \`claude assistant\` again in a few seconds to connect.`, {
+          return await exitWithMessage(root, `Assistant installed in ${installedDir}. The daemon is starting up �?run \`claude assistant\` again in a few seconds to connect.`, {
             exitCode: 0,
             beforeExit: () => gracefulShutdown(0)
           });
@@ -3319,7 +3305,7 @@ async function run(): Promise<CommanderCommand> {
         }
       }
 
-      // Auth — call prepareApiRequest() once for orgUUID, but use a
+      // Auth �?call prepareApiRequest() once for orgUUID, but use a
       // getAccessToken closure for the token so reconnects get fresh tokens.
       const {
         checkAndRefreshOAuthTokenIfNeeded,
@@ -3641,7 +3627,7 @@ async function run(): Promise<CommanderCommand> {
                 logOption = await loadTranscriptFromFile(resolvedPath);
               } catch (error) {
                 if (!isENOENT(error)) throw error;
-                // ENOENT: not a file path — fall through to session-ID handling
+                // ENOENT: not a file path �?fall through to session-ID handling
               }
               if (logOption) {
                 const result = await loadConversationForResume(logOption, undefined /* sourceFile */);
@@ -3788,7 +3774,7 @@ async function run(): Promise<CommanderCommand> {
       // knows the session originated externally. Linux xdg-open and
       // browsers with "always allow" set dispatch the link with no OS-level
       // confirmation, so this is the only signal the user gets that the
-      // prompt — and the working directory / CLAUDE.md it implies — came
+      // prompt �?and the working directory / CLAUDE.md it implies �?came
       // from an external source rather than something they typed.
       let deepLinkBanner: ReturnType<typeof createSystemMessage> | null = null;
       if (feature('LODESTONE')) {
@@ -3804,7 +3790,7 @@ async function run(): Promise<CommanderCommand> {
             lastFetch: options.deepLinkLastFetch !== undefined ? new Date(options.deepLinkLastFetch) : undefined
           }), 'warning');
         } else if (options.prefill) {
-          deepLinkBanner = createSystemMessage('Launched with a pre-filled prompt — review it before pressing Enter.', 'warning');
+          deepLinkBanner = createSystemMessage('Launched with a pre-filled prompt �?review it before pressing Enter.', 'warning');
         }
       }
       const initialMessages = deepLinkBanner ? [deepLinkBanner, ...hookMessages] : hookMessages.length > 0 ? hookMessages : undefined;
@@ -3887,9 +3873,9 @@ async function run(): Promise<CommanderCommand> {
 
   // -p/--print mode: skip subcommand registration. The 52 subcommands
   // (mcp, auth, plugin, skill, task, config, doctor, update, etc.) are
-  // never dispatched in print mode — commander routes the prompt to the
+  // never dispatched in print mode �?commander routes the prompt to the
   // default action. The subcommand registration path was measured at ~65ms
-  // on baseline — mostly the isBridgeEnabled() call (25ms settings Zod parse
+  // on baseline �?mostly the isBridgeEnabled() call (25ms settings Zod parse
   // + 40ms sync keychain subprocess), both hidden by the try/catch that
   // always returns false before enableConfigs(). cc:// URLs are rewritten to
   // `open` at main() line ~851 BEFORE this runs, so argv check is safe here.
@@ -4050,26 +4036,26 @@ async function run(): Promise<CommanderCommand> {
     });
   }
 
-  // `claude ssh <host> [dir]` — registered here only so --help shows it.
+  // `claude ssh <host> [dir]` �?registered here only so --help shows it.
   // The actual interactive flow is handled by early argv rewriting in main()
   // (parallels the DIRECT_CONNECT/cc:// pattern above). If commander reaches
   // this action it means the argv rewrite didn't fire (e.g. user ran
-  // `claude ssh` with no host) — just print usage.
+  // `claude ssh` with no host) �?just print usage.
   if (feature('SSH_REMOTE')) {
-    program.command('ssh <host> [dir]').description('Run Claude Code on a remote host over SSH. Deploys the binary and ' + 'tunnels API auth back through your local machine — no remote setup needed.').option('--permission-mode <mode>', 'Permission mode for the remote session').option('--dangerously-skip-permissions', 'Skip all permission prompts on the remote (dangerous)').option('--local', 'e2e test mode — spawn the child CLI locally (skip ssh/deploy). ' + 'Exercises the auth proxy and unix-socket plumbing without a remote host.').action(async () => {
+    program.command('ssh <host> [dir]').description('Run Claude Code on a remote host over SSH. Deploys the binary and ' + 'tunnels API auth back through your local machine �?no remote setup needed.').option('--permission-mode <mode>', 'Permission mode for the remote session').option('--dangerously-skip-permissions', 'Skip all permission prompts on the remote (dangerous)').option('--local', 'e2e test mode �?spawn the child CLI locally (skip ssh/deploy). ' + 'Exercises the auth proxy and unix-socket plumbing without a remote host.').action(async () => {
       // Argv rewriting in main() should have consumed `ssh <host>` before
       // commander runs. Reaching here means host was missing or the
       // rewrite predicate didn't match.
-      process.stderr.write('Usage: claude ssh <user@host | ssh-config-alias> [dir]\n\n' + "Runs Claude Code on a remote Linux host. You don't need to install\n" + 'anything on the remote or run `claude auth login` there — the binary is\n' + 'deployed over SSH and API auth tunnels back through your local machine.\n');
+      process.stderr.write('Usage: claude ssh <user@host | ssh-config-alias> [dir]\n\n' + "Runs Claude Code on a remote Linux host. You don't need to install\n" + 'anything on the remote or run `claude auth login` there �?the binary is\n' + 'deployed over SSH and API auth tunnels back through your local machine.\n');
       process.exit(1);
     });
   }
 
-  // claude connect — subcommand only handles -p (headless) mode.
+  // claude connect �?subcommand only handles -p (headless) mode.
   // Interactive mode (without -p) is handled by early argv rewriting in main()
   // which redirects to the main command with full TUI support.
   if (feature('DIRECT_CONNECT')) {
-    program.command('open <cc-url>').description('Connect to a Claude Code server (internal — use cc:// URLs)').option('-p, --print [prompt]', 'Print mode (headless)').option('--output-format <format>', 'Output format: text, json, stream-json', 'text').action(async (ccUrl: string, opts: {
+    program.command('open <cc-url>').description('Connect to a Claude Code server (internal �?use cc:// URLs)').option('-p, --print [prompt]', 'Print mode (headless)').option('--output-format <format>', 'Output format: text, json, stream-json', 'text').action(async (ccUrl: string, opts: {
       print?: string | boolean;
       outputFormat: string;
     }) => {
@@ -4297,7 +4283,7 @@ async function run(): Promise<CommanderCommand> {
   });
   if (feature('TRANSCRIPT_CLASSIFIER')) {
     // Skip when tengu_auto_mode_config.enabled === 'disabled' (circuit breaker).
-    // Reads from disk cache — GrowthBook isn't initialized at registration time.
+    // Reads from disk cache �?GrowthBook isn't initialized at registration time.
     if (getAutoModeEnabledStateIfCached() !== 'disabled') {
       const autoModeCmd = program.command('auto-mode').description('Inspect auto mode classifier configuration');
       autoModeCmd.command('defaults').description('Print the default auto mode environment, allow, and deny rules as JSON').action(async () => {
@@ -4324,19 +4310,19 @@ async function run(): Promise<CommanderCommand> {
     }
   }
 
-  // Remote Control command — connect local environment to claude.ai/code.
+  // Remote Control command �?connect local environment to claude.ai/code.
   // The actual command is intercepted by the fast-path in cli.tsx before
   // Commander.js runs, so this registration exists only for help output.
   // Always hidden: isBridgeEnabled() at this point (before enableConfigs)
-  // would throw inside isClaudeAISubscriber → getGlobalConfig and return
-  // false via the try/catch — but not before paying ~65ms of side effects
+  // would throw inside isClaudeAISubscriber �?getGlobalConfig and return
+  // false via the try/catch �?but not before paying ~65ms of side effects
   // (25ms settings Zod parse + 40ms sync `security` keychain subprocess).
   // The dynamic visibility never worked; the command was always hidden.
   if (feature('BRIDGE_MODE')) {
     program.command('remote-control', {
       hidden: true
     }).alias('rc').description('Connect your local environment for remote-control sessions via claude.ai/code').action(async () => {
-      // Unreachable — cli.tsx fast-path handles this command before main.tsx loads.
+      // Unreachable �?cli.tsx fast-path handles this command before main.tsx loads.
       // If somehow reached, delegate to bridgeMain.
       const {
         bridgeMain
@@ -4379,7 +4365,7 @@ async function run(): Promise<CommanderCommand> {
     await update();
   });
 
-  // claude up — run the project's CLAUDE.md "# claude up" setup instructions.
+  // claude up �?run the project's CLAUDE.md "# claude up" setup instructions.
   if ("external" === 'ant') {
     program.command('up').description('[ANT-ONLY] Initialize or upgrade the local dev environment using the "# claude up" section of the nearest CLAUDE.md').action(async () => {
       const {
@@ -4642,10 +4628,10 @@ function maybeActivateBrief(options: unknown): void {
   // --brief / CLAUDE_CODE_BRIEF are explicit opt-ins: check entitlement,
   // then set userMsgOptIn to activate the tool + prompt section. The env
   // var also grants entitlement (isBriefEntitled() reads it), so setting
-  // CLAUDE_CODE_BRIEF=1 alone force-enables for dev/testing — no GB gate
+  // CLAUDE_CODE_BRIEF=1 alone force-enables for dev/testing �?no GB gate
   // needed. initialIsBriefOnly reads getUserMsgOptIn() directly.
   // Conditional require: static import would leak the tool name string
-  // into external builds via BriefTool.ts → prompt.ts.
+  // into external builds via BriefTool.ts �?prompt.ts.
   /* eslint-disable @typescript-eslint/no-require-imports */
   const {
     isBriefEntitled

@@ -8,7 +8,8 @@
     "dev": "bun run src/main.tsx",
     "build": "bun build src/main.tsx --outdir=dist --target=bun --sourcemap",
     "typecheck": "bun x tsc --noEmit",
-    "check": "bun x tsc --noEmit 2>&1 | head -100"
+    "check": "bun x tsc --noEmit 2>&1 | head -100",
+    "postinstall": "bash scripts/postinstall.sh"
   },
   "dependencies": {
     "@alcalzone/ansi-tokenize": "^0.3.0",

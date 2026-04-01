@@ -131,10 +131,11 @@ export function getCompanion(): Companion | undefined {
   if (!stored) {
     // 即使 settings.json 里没有 companion 字段，也生成一个默认的实体
     return {
-      name: 'Puppy',
+      name: '',
       personality: 'A newly born companion',
       hatchedAt: Date.now(),
-      ...bones
+      ...bones,
+      eye: '✦'
     } as unknown as Companion
   }
   

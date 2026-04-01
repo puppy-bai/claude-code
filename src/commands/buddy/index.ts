@@ -50,10 +50,21 @@ const buddyCommand: Command = {
         // ====================
         if (buddyAction === 'set') {
           const prop = parts[1]
-          const value = parts.slice(2).join(' ')
+          let value = parts.slice(2).join(' ')
           
-          if (!prop || !value) {
+          if (prop === 'eye' && value === 'star') {
+            value = '✦'
+          }
+          
+          if (!prop) {
             return { type: 'text', value: '❌ 格式错误。使用方法: /buddy set <species|hat|eye|name> <value>' }
+          }
+
+          // 允许名字为空（即不传 value 时，如果 prop 是 name，则清空名字）
+          if (prop === 'name' && !value) {
+            value = ''
+          } else if (!value) {
+            return { type: 'text', value: '❌ 格式错误。缺少参数值。使用方法: /buddy set <species|hat|eye|name> <value>' }
           }
           
           if (prop === 'species' && !SPECIES.includes(value as any)) {
@@ -68,7 +79,8 @@ const buddyCommand: Command = {
           
           // 更新并持久化到配置
           updateCompanion({ [prop]: value })
-          return { type: 'text', value: `✨ 成功! 宠物的 ${prop} 已被更新为 "${value}"。你可以使用 /buddy 查看。` }
+          const displayValue = value === '' ? '(空)' : `"${value}"`
+          return { type: 'text', value: `✨ 成功! 宠物的 ${prop} 已被更新为 ${displayValue}。你可以使用 /buddy 查看。` }
         }
         
         // ====================
@@ -208,10 +220,10 @@ const buddyCommand: Command = {
             return { type: 'text', value: '' }
           case 'summon':
           default:
-            message = `Hello! I'm ${companion.name}, your ${bones.rarity} ${bones.species}!`
+            message = companion.name ? `Hello! I'm ${companion.name}, your ${bones.rarity} ${bones.species}!` : `Hello! I'm your ${bones.rarity} ${bones.species}!`;
             extraInfo = `
 ✨ **宠物属性面板** ✨
-- 名字: ${companion.name}
+- 名字: ${companion.name || '(未命名)'}
 - 物种: ${bones.species.toUpperCase()}
 - 稀有度: ${bones.rarity.toUpperCase()} ${bones.shiny ? '✦(闪光)' : ''}
 - 帽子: ${bones.hat}
@@ -233,7 +245,7 @@ const buddyCommand: Command = {
         
         return {
           type: 'text',
-          value: `${spriteArt}\n\n${message}\n\n${extraInfo}`,
+          value: `${message}\n\n${spriteArt}\n\n${extraInfo}`,
         }
       },
     }

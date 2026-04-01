@@ -724,6 +724,81 @@ export function useTypeahead({
         clearSuggestions();
         return;
       }
+
+      // Handle /buddy command arguments completion
+      if (parsedCommand && parsedCommand.commandName === 'buddy' && parsedCommand.args !== undefined && value.includes(' ')) {
+        const beforeCursor = value.slice(0, effectiveCursorOffset);
+        const lastSpaceIndex = beforeCursor.lastIndexOf(' ');
+        const currentWord = beforeCursor.slice(lastSpaceIndex + 1).toLowerCase();
+        const words = beforeCursor.trimLeft().split(/\s+/);
+        
+        let buddySuggestions: SuggestionItem[] = [];
+        
+        if (words.length <= 2 && (words.length === 1 || !beforeCursor.endsWith(' '))) {
+          const actions = ['on', 'off', 'pet', 'wave', 'sleep', 'dance', 'happy', 'list', 'view', 'set'];
+          buddySuggestions = actions
+            .filter(a => a.startsWith(currentWord))
+            .map(a => ({
+              id: `buddy-action-${a}`,
+              displayText: a,
+              description: `Buddy action`,
+              metadata: { completionType: 'command' }
+            }));
+        } else if (words[1] === 'set' && (words.length === 3 && !beforeCursor.endsWith(' ') || words.length === 2 && beforeCursor.endsWith(' '))) {
+          const props = ['species', 'hat', 'eye', 'name'];
+          buddySuggestions = props
+            .filter(p => p.startsWith(currentWord))
+            .map(p => ({
+              id: `buddy-prop-${p}`,
+              displayText: p,
+              description: `Buddy property`,
+              metadata: { completionType: 'command' }
+            }));
+        } else if (words[1] === 'set' && words[2] === 'species' && (words.length === 4 && !beforeCursor.endsWith(' ') || words.length === 3 && beforeCursor.endsWith(' '))) {
+          const speciesList = ['duck', 'goose', 'blob', 'cat', 'dragon', 'octopus', 'owl', 'penguin', 'turtle', 'snail', 'ghost', 'axolotl', 'capybara', 'cactus', 'robot', 'rabbit', 'mushroom', 'chonk'];
+          buddySuggestions = speciesList
+            .filter(s => s.startsWith(currentWord))
+            .map(s => ({
+              id: `buddy-species-${s}`,
+              displayText: s,
+              description: `Buddy species`,
+              metadata: { completionType: 'command' }
+            }));
+        } else if (words[1] === 'set' && words[2] === 'hat' && (words.length === 4 && !beforeCursor.endsWith(' ') || words.length === 3 && beforeCursor.endsWith(' '))) {
+          const hatsList = ['none', 'crown', 'tophat', 'propeller', 'halo', 'wizard', 'beanie', 'tinyduck'];
+          buddySuggestions = hatsList
+            .filter(h => h.startsWith(currentWord))
+            .map(h => ({
+              id: `buddy-hat-${h}`,
+              displayText: h,
+              description: `Buddy hat`,
+              metadata: { completionType: 'command' }
+            }));
+        } else if (words[1] === 'set' && words[2] === 'eye' && (words.length === 4 && !beforeCursor.endsWith(' ') || words.length === 3 && beforeCursor.endsWith(' '))) {
+          const eyesList = ['·', '*', 'o', 'O', '@', '-', '>', '^', '✦', 'star'];
+          buddySuggestions = eyesList
+            .filter(e => e.startsWith(currentWord))
+            .map(e => ({
+              id: `buddy-eye-${e}`,
+              displayText: e,
+              description: `Buddy eye`,
+              metadata: { completionType: 'command' }
+            }));
+        }
+
+        if (buddySuggestions.length > 0) {
+          setSuggestionsState(prev => ({
+            suggestions: buddySuggestions,
+            selectedSuggestion: getPreservedSelection(prev.suggestions, prev.selectedSuggestion, buddySuggestions),
+            commandArgumentHint: undefined
+          }));
+          setSuggestionType('shell');
+          return;
+        } else if (words.length > 1) {
+          clearSuggestions();
+          return;
+        }
+      }
     }
 
     // Determine whether to display the argument hint and command suggestions.

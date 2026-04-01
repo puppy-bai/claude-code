@@ -9,7 +9,7 @@ const ENABLED_FEATURES = new Set<string>([
   // 'VOICE_MODE',          // Voice input
   // 'COORDINATOR_MODE',    // Multi-agent coordinator
   // 'TRANSCRIPT_CLASSIFIER', // Auto-mode classifier
-  // 'BUDDY',               // Companion sprite
+  'BUDDY',               // Companion sprite
   // 'WEB_BROWSER_TOOL',    // Web browser tool
   // 'CHICAGO_MCP',         // Computer use MCP
   // 'DAEMON',              // Daemon mode

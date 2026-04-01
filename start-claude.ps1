@@ -32,6 +32,9 @@ Write-Host ""
 Write-Host "[INFO] Starting Claude Code..." -ForegroundColor Cyan
 Write-Host ""
 
+# Set Git Bash path for Windows compatibility
+$env:CLAUDE_CODE_GIT_BASH_PATH = "D:\git\Git\usr\bin\bash.exe"
+
 try {
     bun run src/entrypoints/cli.tsx
 

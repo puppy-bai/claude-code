@@ -126,8 +126,57 @@ export function companionUserId(): string {
 // and editing config.companion can't fake a rarity.
 export function getCompanion(): Companion | undefined {
   const stored = getGlobalConfig().companion
-  if (!stored) return undefined
   const { bones } = roll(companionUserId())
-  // bones last so stale bones fields in old-format configs get overridden
-  return { ...stored, ...bones }
+  
+  if (!stored) {
+    // 即使 settings.json 里没有 companion 字段，也生成一个默认的实体
+    return {
+      name: 'Puppy',
+      personality: 'A newly born companion',
+      hatchedAt: Date.now(),
+      ...bones
+    } as unknown as Companion
+  }
+  
+  // 从 stored 中提取非 bones 属性，确保 bones 始终是嵌套对象
+  const { species, hat, eye, rarity, shiny, stats, bones: legacyBones, ...soul } = stored as any
+  
+  // 允许 stored 中的外观属性覆盖随机生成的 bones 属性
+  const customBones = { ...bones }
+  if (species) customBones.species = species
+  if (hat) customBones.hat = hat
+  if (eye) customBones.eye = eye
+  if (rarity) customBones.rarity = rarity
+  if (shiny !== undefined) customBones.shiny = shiny
+  if (stats) customBones.stats = stats
+  
+  return { ...soul, ...customBones } as unknown as Companion
+}
+
+export function updateCompanion(updates: Partial<Companion>): void {
+  import('../utils/config.js').then(({ saveGlobalConfig, getGlobalConfig }) => {
+    saveGlobalConfig(config => {
+      const current = config.companion || getCompanion()
+      // Remove legacy 'bones' object from settings if it exists
+      if (current && (current as any).bones) {
+        delete (current as any).bones
+      }
+      // Extract soul properties to save, avoiding saving bones properties in config
+      const { species, hat, eye, rarity, shiny, stats, ...soulUpdates } = updates as any
+      
+      const newCompanion = {
+        ...current,
+        ...soulUpdates,
+      } as any;
+      
+      if (species !== undefined) newCompanion.species = species;
+      if (hat !== undefined) newCompanion.hat = hat;
+      if (eye !== undefined) newCompanion.eye = eye;
+      
+      return {
+        ...config,
+        companion: newCompanion,
+      }
+    })
+  })
 }

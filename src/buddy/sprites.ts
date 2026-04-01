@@ -442,13 +442,13 @@ const BODIES: Record<Species, string[][]> = {
 
 const HAT_LINES: Record<Hat, string> = {
   none: '',
-  crown: '   \\^^^/    ',
-  tophat: '   [___]    ',
-  propeller: '    -+-     ',
-  halo: '   (   )    ',
-  wizard: '    /^\\     ',
-  beanie: '   (___)    ',
-  tinyduck: '    ,>      ',
+  crown: '    \\^^^/   ',
+  tophat: '    [___]   ',
+  propeller: '     -+-    ',
+  halo: '    (   )   ',
+  wizard: '     /^\\    ',
+  beanie: '    (___)   ',
+  tinyduck: '     ,>     ',
 }
 
 export function renderSprite(bones: CompanionBones, frame = 0): string[] {
@@ -457,10 +457,12 @@ export function renderSprite(bones: CompanionBones, frame = 0): string[] {
     line.replaceAll('{E}', bones.eye),
   )
   const lines = [...body]
-  // Only replace with hat if line 0 is empty (some fidget frames use it for smoke etc)
-  if (bones.hat !== 'none' && !lines[0]!.trim()) {
+  
+  if (bones.hat !== 'none') {
     lines[0] = HAT_LINES[bones.hat]
   }
+
+  
   // Drop blank hat slot — wastes a row in the Card and ambient sprite when
   // there's no hat and the frame isn't using it for smoke/antenna/etc.
   // Only safe when ALL frames have blank line 0; otherwise heights oscillate.

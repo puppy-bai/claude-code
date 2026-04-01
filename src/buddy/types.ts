@@ -73,7 +73,7 @@ export const SPECIES = [
 ] as const
 export type Species = (typeof SPECIES)[number] // biome-ignore format: keep compact
 
-export const EYES = ['·', '✦', '×', '◉', '@', '°'] as const
+export const EYES = ['·', '*', 'x', 'o', '@', '°', '✦'] as const
 export type Eye = (typeof EYES)[number]
 
 export const HATS = [

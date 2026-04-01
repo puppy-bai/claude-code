@@ -1,4 +1,6 @@
 import { plugin } from 'bun'
+import { readFileSync } from 'fs'
+import { join } from 'path'
 
 plugin({
   name: 'bun-bundle-polyfill',
@@ -8,8 +10,16 @@ plugin({
       path: 'bun-bundle-polyfill',
       namespace: 'bun-bundle-ns',
     }))
+    
+    let polyfillCode = `export function feature(name) { return false }`
+    try {
+      polyfillCode = readFileSync(join(process.cwd(), 'node_modules/bundle/index.js'), 'utf-8')
+    } catch (e) {
+      // Fallback
+    }
+
     build.onLoad({ filter: /.*/, namespace: 'bun-bundle-ns' }, () => ({
-      contents: `export function feature(name) { return false }`,
+      contents: polyfillCode,
       loader: 'js',
     }))
   },

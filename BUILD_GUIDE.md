@@ -115,6 +115,6 @@
     $env:HTTP_PROXY="http://127.0.0.1:您的代理端口"
     $env:HTTPS_PROXY="http://127.0.0.1:您的代理端口"
     ```
-
 * **使用其他 API (OpenAI/DeepSeek等)**:
+
   * **工具**: 使用 [cc-switch](https://github.com/farion1231/cc-switch) 可以轻松让 Claude Code 兼容非 Anthropic 的 API。

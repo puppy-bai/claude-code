@@ -64,7 +64,9 @@ function SpeechBubble(t0) {
     t2 = "round";
     t3 = borderColor;
     t4 = 1;
-    t5 = 34;
+    // 自适应宽度：取最长一行的宽度 + 左右 padding (2) + 边框 (2)，最小 10，最大 34
+    const maxLineLen = Math.max(...lines.map(l => stringWidth(l)));
+    t5 = Math.min(34, Math.max(10, maxLineLen + 4));
     let t7;
     if ($[11] !== fading) {
       t7 = (l, i) => <Text key={i} italic={true} dimColor={!fading} color={fading ? "inactive" : undefined}>{l}</Text>;
@@ -153,7 +155,7 @@ export const MIN_COLS_FOR_FULL_SPRITE = 100;
 const SPRITE_BODY_WIDTH = 12;
 const NAME_ROW_PAD = 2; // focused state wraps name in spaces: ` name `
 const SPRITE_PADDING_X = 2;
-const BUBBLE_WIDTH = 36; // SpeechBubble box (34) + tail column
+const BUBBLE_WIDTH = 36; // Default width, but now overridden dynamically by the actual width of the text
 const NARROW_QUIP_CAP = 24;
 function spriteColWidth(nameWidth: number): number {
   return Math.max(SPRITE_BODY_WIDTH, nameWidth + NAME_ROW_PAD);
@@ -165,7 +167,7 @@ function spriteColWidth(nameWidth: number): number {
 // Narrow terminals: 0 — REPL.tsx stacks the one-liner on its own row
 // (above input in fullscreen, below in scrollback), so no reservation.
 export function companionReservedColumns(terminalColumns: number, speaking: boolean): number {
-  if (!feature('BUDDY')) return 0;
+  // if (!feature('BUDDY')) return 0;
   const companion = getCompanion();
   if (!companion || getGlobalConfig().companionMuted) return 0;
   if (terminalColumns < MIN_COLS_FOR_FULL_SPRITE) return 0;
@@ -212,9 +214,9 @@ export function CompanionSprite(): React.ReactNode {
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- tick intentionally captured at reaction-change, not tracked
   }, [reaction, setAppState]);
-  if (!feature('BUDDY')) return null;
+  // if (!feature('BUDDY')) return null;
   const companion = getCompanion();
-  if (!companion || getGlobalConfig().companionMuted) return null;
+  if (!companion) return null; // 强制无视 getGlobalConfig().companionMuted
   const color = RARITY_COLORS[companion.rarity];
   const colWidth = spriteColWidth(stringWidth(companion.name));
   const bubbleAge = reaction ? tick - lastSpokeTick.current : 0;
@@ -224,21 +226,21 @@ export function CompanionSprite(): React.ReactNode {
 
   // Narrow terminals: collapse to one-line face. When speaking, the quip
   // replaces the name beside the face (no room for a bubble).
-  if (columns < MIN_COLS_FOR_FULL_SPRITE) {
-    const quip = reaction && reaction.length > NARROW_QUIP_CAP ? reaction.slice(0, NARROW_QUIP_CAP - 1) + '…' : reaction;
-    const label = quip ? `"${quip}"` : focused ? ` ${companion.name} ` : companion.name;
-    return <Box paddingX={1} alignSelf="flex-end">
-        <Text>
-          {petting && <Text color="autoAccept">{figures.heart} </Text>}
-          <Text bold color={color}>
-            {renderFace(companion)}
-          </Text>{' '}
-          <Text italic dimColor={!focused && !reaction} bold={focused} inverse={focused && !reaction} color={reaction ? fading ? 'inactive' : color : focused ? color : undefined}>
-            {label}
-          </Text>
-        </Text>
-      </Box>;
-  }
+  // if (columns < MIN_COLS_FOR_FULL_SPRITE && false) { // 强制忽略宽度限制，永远画出完整模型
+    // const quip = reaction && reaction.length > NARROW_QUIP_CAP ? reaction.slice(0, NARROW_QUIP_CAP - 1) + '…' : reaction;
+  // const label = quip ? `"${quip}"` : focused ? ` ${companion.name} ` : companion.name;
+  //   return <Box paddingX={1} alignSelf="flex-end">
+  //       <Text>
+  //         {petting && <Text color="autoAccept">{figures.heart} </Text>}
+  //         <Text bold color={color}>
+  //           {renderFace(companion)}
+  //         </Text>{' '}
+  //         <Text italic dimColor={!focused && !reaction} bold={focused} inverse={focused && !reaction} color={reaction ? fading ? 'inactive' : color : focused ? color : undefined}>
+  //           {label}
+  //         </Text>
+  //       </Text>
+  //     </Box>;
+  // }
   const frameCount = spriteFrameCount(companion.species);
   const heartFrame = petting ? PET_HEARTS[petAge % PET_HEARTS.length] : null;
   let spriteFrame: number;
@@ -264,7 +266,7 @@ export function CompanionSprite(): React.ReactNode {
   // sprite doesn't jump up when selected. flexShrink=0 stops the
   // inline-bubble row wrapper from squeezing the sprite to fit.
   const spriteColumn = <Box flexDirection="column" flexShrink={0} alignItems="center" width={colWidth}>
-      {sprite.map((line, i) => <Text key={i} color={i === 0 && heartFrame ? 'autoAccept' : color}>
+      {sprite.map((line, i) => <Text key={i} color={i === 0 && heartFrame ? 'autoAccept' : 'white'}>
           {line}
         </Text>)}
       <Text italic bold={focused} dimColor={!focused} color={focused ? color : undefined} inverse={focused}>
@@ -284,7 +286,8 @@ export function CompanionSprite(): React.ReactNode {
     return <Box paddingX={1}>{spriteColumn}</Box>;
   }
   return <Box flexDirection="row" alignItems="flex-end" paddingX={1} flexShrink={0}>
-      <SpeechBubble text={reaction} color={color} fading={fading} tail="right" />
+      {/* 暂时注释掉气泡文字，如需恢复只需取消这行的注释 */}
+      {/* <SpeechBubble text={reaction} color="white" fading={fading} tail="right" /> */}
       {spriteColumn}
     </Box>;
 }
@@ -295,7 +298,7 @@ export function CompanionSprite(): React.ReactNode {
 // just reads companionReaction and renders the fade.
 export function CompanionFloatingBubble() {
   const $ = _c(8);
-  const reaction = useAppState(_temp);
+  const reaction = useAppState(s => s.companionReaction);
   let t0;
   if ($[0] !== reaction) {
     t0 = {
@@ -337,17 +340,18 @@ export function CompanionFloatingBubble() {
     t3 = $[4];
   }
   useEffect(t2, t3);
-  if (!feature("BUDDY") || !reaction) {
+  if (!reaction) {
     return null;
   }
   const companion = getCompanion();
-  if (!companion || getGlobalConfig().companionMuted) {
+  if (!companion) {
     return null;
   }
   const t4 = tick >= BUBBLE_SHOW - FADE_WINDOW;
   let t5;
   if ($[5] !== reaction || $[6] !== t4) {
-    t5 = <SpeechBubble text={reaction} color={RARITY_COLORS[companion.rarity]} fading={t4} tail="down" />;
+    // t5 = <SpeechBubble text={reaction} color="white" fading={t4} tail="down" />;
+    t5 = null; // 暂时注释掉气泡文字
     $[5] = reaction;
     $[6] = t4;
     $[7] = t5;

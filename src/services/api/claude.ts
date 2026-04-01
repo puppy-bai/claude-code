@@ -1606,10 +1606,10 @@ async function* queryModel(
         !isEnvTruthy(process.env.CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING) &&
         modelSupportsAdaptiveThinking(options.model)
       ) {
-        // For models that support adaptive thinking, always use adaptive
+        // For models that support adaptive thinking, always use enabled
         // thinking without a budget.
         thinking = {
-          type: 'adaptive',
+          type: 'enabled',
         } satisfies BetaMessageStreamParams['thinking']
       } else {
         // For models that do not support adaptive thinking, use the default

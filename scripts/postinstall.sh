@@ -23,7 +23,7 @@ const ENABLED_FEATURES = new Set([
   // 'COORDINATOR_MODE',      // Multi-agent swarm coordinator
   // 'TRANSCRIPT_CLASSIFIER', // Auto-mode permission classifier
   // 'BASH_CLASSIFIER',       // Bash command safety classifier
-  // 'BUDDY',                 // Companion sprite animation
+  'BUDDY',                 // Companion sprite animation
   // 'WEB_BROWSER_TOOL',      // In-process web browser tool
   // 'CHICAGO_MCP',           // Computer Use (screen control)
   // 'AGENT_TRIGGERS',        // Scheduled cron agents

@@ -4,3 +4,4 @@ dist/
 bun.lock
 bun.lockb
 .DS_Store
+.claude/

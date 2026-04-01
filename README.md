@@ -52,7 +52,8 @@ bun run dev
 
 本版本深度解锁并重构了原本隐藏在代码深处的 `/buddy` 电子宠物系统，为你提供一个常驻在终端右下角的赛博陪伴：
 
-- **🎨 18 种物种补全**: 告别原本简单的占位符，现在支持 `cat`, `dog`, `dragon`, `capybara`, `axolotl`, `owl`, `fox`, `penguin` 等 18 种精美的 ASCII 艺术宠物形态！
+- **🎨 18 种物种补全**: 告别原本简单的占位符，现在支持 18 种精美的 ASCII 艺术宠物形态！完整列表包括：
+  `duck` (鸭子), `goose` (鹅), `blob` (史莱姆), `cat` (猫咪), `dragon` (小龙), `octopus` (章鱼), `owl` (猫头鹰), `penguin` (企鹅), `turtle` (乌龟), `snail` (蜗牛), `ghost` (幽灵), `axolotl` (美西螈), `capybara` (水豚), `cactus` (仙人掌), `robot` (机器人), `rabbit` (兔子), `mushroom` (蘑菇), `chonk` (胖橘)。
 - **🎩 自由换装系统**:
   - 支持 **8 种帽子**（如小皇冠 `crown`、巫师帽 `wizard`、派对帽 `party` 等）。
   - 支持 **7 种眼睛**（包括单宽防偏移的 `*`, `o`, `@`，以及闪光眼 `✦`）。

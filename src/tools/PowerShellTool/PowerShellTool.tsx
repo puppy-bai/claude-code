@@ -43,6 +43,8 @@ import { getDefaultTimeoutMs, getMaxTimeoutMs, getPrompt } from './prompt.js';
 import { hasSyncSecurityConcerns, isReadOnlyCommand, resolveToCanonical } from './readOnlyValidation.js';
 import { POWERSHELL_TOOL_NAME } from './toolName.js';
 import { renderToolResultMessage, renderToolUseErrorMessage, renderToolUseMessage, renderToolUseProgressMessage, renderToolUseQueuedMessage } from './UI.js';
+import { reportCommandResult, previousCommandResult } from '../../buddy/idleTracker.js';
+import { gainExperience } from '../../buddy/companion.js';
 
 // Never use os.EOL for terminal output — \r\n on Windows breaks Ink rendering
 const EOL = '\n';
@@ -444,6 +446,7 @@ export const PowerShellTool = buildTool({
     if (isWindowsSandboxPolicyViolation()) {
       throw new Error(WINDOWS_SANDBOX_POLICY_REFUSAL);
     }
+    const startTime = Date.now();
     const {
       abortController,
       setAppState,
@@ -578,9 +581,15 @@ export const PowerShellTool = buildTool({
       // which interpretCommandResult can mistake for grep-no-match / findstr
       // string-not-found. Throw it directly. Matches BashTool.tsx:957.
       if (result.preSpawnError) {
+        reportCommandResult(false, undefined, Date.now() - startTime);
         throw new Error(result.preSpawnError);
       }
       if (interpretation.isError && !isInterrupt) {
+        const errorLines = stdout.split('\n').filter(l => l.trim().length > 0);
+        const lastLine = errorLines[errorLines.length - 1] || 'Unknown error';
+        const friendlyError = lastLine.length > 15 ? lastLine.substring(0, 15) + '...' : lastLine;
+        reportCommandResult(false, friendlyError, Date.now() - startTime);
+        gainExperience('CHAOS', 1);
         throw new ShellError(stdout, result.stderr || '', result.code, result.interrupted);
       }
 
@@ -641,6 +650,15 @@ export const PowerShellTool = buildTool({
         exit_code: result.code,
         interrupted: result.interrupted
       });
+      
+      reportCommandResult(true, undefined, Date.now() - startTime);
+      if (previousCommandResult === 'failure') {
+        gainExperience('DEBUGGING', 1);
+      }
+      if ((Date.now() - startTime) > 10000) {
+        gainExperience('PATIENCE', 1);
+      }
+
       return {
         data: {
           stdout: compressedStdout,

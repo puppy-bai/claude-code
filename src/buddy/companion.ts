@@ -94,7 +94,7 @@ function rollFrom(rng: () => number): Roll {
     rarity,
     species: pick(rng, SPECIES),
     eye: pick(rng, EYES),
-    hat: rarity === 'common' ? 'none' : pick(rng, HATS),
+    hat: pick(rng, HATS),
     shiny: rng() < 0.01,
     stats: rollStats(rng, rarity),
   }
@@ -126,19 +126,12 @@ export function companionUserId(): string {
 // and editing config.companion can't fake a rarity.
 export function getCompanion(): Companion | undefined {
   const stored = getGlobalConfig().companion
-  const { bones } = roll(companionUserId())
   
   if (!stored) {
-    // 即使 settings.json 里没有 companion 字段，也生成一个默认的实体
-    return {
-      name: '',
-      personality: 'A newly born companion',
-      hatchedAt: Date.now(),
-      ...bones,
-      eye: '✦'
-    } as unknown as Companion
+    return undefined
   }
   
+  const { bones } = roll(companionUserId())
   // 从 stored 中提取非 bones 属性，确保 bones 始终是嵌套对象
   const { species, hat, eye, rarity, shiny, stats, bones: legacyBones, ...soul } = stored as any
   
@@ -173,6 +166,7 @@ export function updateCompanion(updates: Partial<Companion>): void {
       if (species !== undefined) newCompanion.species = species;
       if (hat !== undefined) newCompanion.hat = hat;
       if (eye !== undefined) newCompanion.eye = eye;
+      if (stats !== undefined) newCompanion.stats = stats;
       
       return {
         ...config,
@@ -180,4 +174,56 @@ export function updateCompanion(updates: Partial<Companion>): void {
       }
     })
   })
+}
+
+// Gain experience points for a specific stat.
+// Triggers a notification and potentially unlocks a hat if it reaches 100.
+export function gainExperience(stat: StatName, amount: number): void {
+  const companion = getCompanion();
+  if (!companion) return;
+  
+  const currentVal = (companion.stats && companion.stats[stat]) || 0;
+  if (currentVal >= 100) return; // Already maxed
+  
+  const newVal = Math.min(100, currentVal + amount);
+  
+  // Create a clean copy of the stats to save
+  const newStats = { ...(companion.stats || {}), [stat]: newVal };
+  
+  let newHat = companion.hat;
+  let unlockedHat = false;
+  let unlockMsg = '';
+  
+  if (newVal === 100 && currentVal < 100) {
+    unlockedHat = true;
+    if (stat === 'DEBUGGING') { newHat = 'halo'; unlockMsg = 'Debug大师！解锁了光环(halo)'; }
+    else if (stat === 'PATIENCE') { newHat = 'crown'; unlockMsg = '耐心王者！解锁了皇冠(crown)'; }
+    else if (stat === 'CHAOS') { newHat = 'propeller'; unlockMsg = '混沌行者！解锁了竹蜻蜓(propeller)'; }
+    else if (stat === 'WISDOM') { newHat = 'wizard'; unlockMsg = '大贤者！解锁了法师帽(wizard)'; }
+    else if (stat === 'SNARK') { newHat = 'beanie'; unlockMsg = '毒舌之王！解锁了冷帽(beanie)'; }
+  }
+  
+  // Use updateCompanion correctly, wrapping stats under the companion object structure
+  import('../utils/config.js').then(({ saveGlobalConfig }) => {
+    saveGlobalConfig(config => {
+      const currentComp = config.companion || getCompanion();
+      return {
+        ...config,
+        companion: {
+          ...currentComp,
+          stats: newStats,
+          hat: newHat
+        }
+      } as any;
+    });
+  });
+  
+  import('../state/AppStateStore.js').then(({ useAppStateStore }) => {
+    const store = useAppStateStore.getState();
+    const expMsg = unlockedHat ? `🎉 ${stat} 满级！${unlockMsg}` : `✨ ${stat} +${amount}`;
+    store.setAppState(prev => ({
+      ...prev,
+      companionExpGain: expMsg
+    }));
+  });
 }

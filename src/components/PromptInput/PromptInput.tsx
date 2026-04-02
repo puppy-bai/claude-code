@@ -121,6 +121,7 @@ import { usePromptInputPlaceholder } from './usePromptInputPlaceholder.js';
 import { useShowFastIconHint } from './useShowFastIconHint.js';
 import { useSwarmBanner } from './useSwarmBanner.js';
 import { isNonSpacePrintable, isVimModeEnabled } from './utils.js';
+import { updateLastInputTime } from '../../buddy/idleTracker.js';
 type Props = {
   debug: boolean;
   ideSelection: IDESelection | undefined;
@@ -1858,6 +1859,7 @@ function PromptInput({
     isActive: !!footerItemSelected && !isModalOverlayActive
   });
   useInput((char, key) => {
+    updateLastInputTime();
     // Skip all input handling when a full-screen dialog is open. These dialogs
     // render via early return, but hooks run unconditionally — so without this
     // guard, Escape inside a dialog leaks to the double-press message-selector.

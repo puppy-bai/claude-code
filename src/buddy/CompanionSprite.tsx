@@ -13,10 +13,14 @@ import type { Theme } from '../utils/theme.js';
 import { getCompanion } from './companion.js';
 import { renderFace, renderSprite, spriteFrameCount } from './sprites.js';
 import { RARITY_COLORS } from './types.js';
+import { getIdleTime, lastCommandResult, lastCommandTime, lastCommandErrorMsg } from './idleTracker.js';
+import { getRandomTip } from './tips.js';
+
 const TICK_MS = 500;
 const BUBBLE_SHOW = 20; // ticks → ~10s at 500ms
 const FADE_WINDOW = 6; // last ~3s the bubble dims so you know it's about to go
 const PET_BURST_MS = 2500; // how long hearts float after /buddy pet
+const SLEEP_IDLE_MS = 5 * 60 * 1000; // 5 minutes
 
 // Idle sequence: mostly rest (frame 0), occasional fidget (frames 1-2), rare blink.
 // Sequence indices map to sprite frames; -1 means "blink on frame 0".
@@ -177,7 +181,7 @@ export function companionReservedColumns(terminalColumns: number, speaking: bool
 }
 export function CompanionSprite(): React.ReactNode {
   const reaction = useAppState(s => s.companionReaction);
-  const petAt = useAppState(s => s.companionPetAt);
+  const expGain = useAppState(s => s.companionExpGain);
   const focused = useAppState(s => s.footerSelection === 'companion');
   const setAppState = useSetAppState();
   const {
@@ -185,19 +189,16 @@ export function CompanionSprite(): React.ReactNode {
   } = useTerminalSize();
   const [tick, setTick] = useState(0);
   const lastSpokeTick = useRef(0);
-  // Sync-during-render (not useEffect) so the first post-pet render already
-  // has petStartTick=tick and petAge=0 — otherwise frame 0 is skipped.
-  const [{
-    petStartTick,
-    forPetAt
-  }, setPetStart] = useState({
-    petStartTick: 0,
-    forPetAt: petAt
+  const lastExpGainTick = useRef(0);
+
+  const [{ expGainStartTick, forExpGain }, setExpGainStart] = useState({
+    expGainStartTick: 0,
+    forExpGain: expGain
   });
-  if (petAt !== forPetAt) {
-    setPetStart({
-      petStartTick: tick,
-      forPetAt: petAt
+  if (expGain !== forExpGain) {
+    setExpGainStart({
+      expGainStartTick: tick,
+      forExpGain: expGain
     });
   }
   useEffect(() => {
@@ -212,17 +213,164 @@ export function CompanionSprite(): React.ReactNode {
       companionReaction: undefined
     }), BUBBLE_SHOW * TICK_MS, setAppState);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- tick intentionally captured at reaction-change, not tracked
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reaction, setAppState]);
+
+  useEffect(() => {
+    if (!expGain) return;
+    lastExpGainTick.current = tick;
+    const timer = setTimeout(setA => setA((prev: AppState) => prev.companionExpGain === undefined ? prev : {
+      ...prev,
+      companionExpGain: undefined
+    }), BUBBLE_SHOW * TICK_MS, setAppState);
+    return () => clearTimeout(timer);
+  }, [expGain, setAppState]);
   // if (!feature('BUDDY')) return null;
   const companion = getCompanion();
-  if (!companion) return null; // 强制无视 getGlobalConfig().companionMuted
-  const color = RARITY_COLORS[companion.rarity];
-  const colWidth = spriteColWidth(stringWidth(companion.name));
+  const color = companion ? RARITY_COLORS[companion.rarity] : 'white';
+  const colWidth = companion ? spriteColWidth(stringWidth(companion.name)) : 0;
   const bubbleAge = reaction ? tick - lastSpokeTick.current : 0;
   const fading = reaction !== undefined && bubbleAge >= BUBBLE_SHOW - FADE_WINDOW;
-  const petAge = petAt ? tick - petStartTick : Infinity;
-  const petting = petAge * TICK_MS < PET_BURST_MS;
+  const expAge = expGain ? tick - expGainStartTick : Infinity;
+  const showingExp = expAge * TICK_MS < PET_BURST_MS;
+
+  const idleMs = getIdleTime();
+  const isSleeping = idleMs > SLEEP_IDLE_MS;
+  const wasSleeping = useRef(false);
+  const [wakeAnimTick, setWakeAnimTick] = useState<number | null>(null);
+
+  // Command feedback state
+  const lastProcessedCmdTime = useRef(lastCommandTime);
+  const [cmdFeedbackTick, setCmdFeedbackTick] = useState<number | null>(null);
+  const [cmdFeedbackType, setCmdFeedbackType] = useState<'success' | 'failure' | null>(null);
+
+  const [activeTip, setActiveTip] = useState<string | null>(null);
+  const [tipTick, setTipTick] = useState<number | null>(null);
+  const lastTipTime = useRef(0);
+
+  useEffect(() => {
+    if (!isSleeping && !reaction && !cmdFeedbackType) {
+      if (tipTick === null) {
+        if (Math.random() < 0.01 && Date.now() - lastTipTime.current > 60000) {
+          setActiveTip(getRandomTip());
+          setTipTick(0);
+          lastTipTime.current = Date.now();
+        }
+      } else {
+        if (tipTick < 16) {
+          setTipTick(tipTick + 1);
+        } else {
+          setTipTick(null);
+          setActiveTip(null);
+        }
+      }
+    } else {
+      setTipTick(null);
+      setActiveTip(null);
+    }
+  }, [tick]);
+
+  useEffect(() => {
+    if (lastCommandTime > lastProcessedCmdTime.current) {
+      lastProcessedCmdTime.current = lastCommandTime;
+      setCmdFeedbackType(lastCommandResult);
+      setCmdFeedbackTick(0);
+    }
+  }, [tick]);
+
+  useEffect(() => {
+    if (cmdFeedbackTick !== null) {
+      if (cmdFeedbackTick < 8) { // ~4 seconds of feedback
+        const timer = setTimeout(() => setCmdFeedbackTick(cmdFeedbackTick + 1), TICK_MS);
+        return () => clearTimeout(timer);
+      } else {
+        setCmdFeedbackTick(null);
+        setCmdFeedbackType(null);
+      }
+    }
+  }, [cmdFeedbackTick]);
+
+  useEffect(() => {
+    if (isSleeping) {
+      wasSleeping.current = true;
+      setWakeAnimTick(null);
+    } else if (wasSleeping.current) {
+      wasSleeping.current = false;
+      // Just woke up! Start wake animation instead of setting reaction text
+      setWakeAnimTick(0);
+    }
+  }, [isSleeping]);
+
+  useEffect(() => {
+    if (wakeAnimTick !== null) {
+      if (wakeAnimTick < 3) { // 3 frames of wake animation
+        const timer = setTimeout(() => setWakeAnimTick(wakeAnimTick + 1), TICK_MS);
+        return () => clearTimeout(timer);
+      } else {
+        setWakeAnimTick(null); // Animation done
+      }
+    }
+  }, [wakeAnimTick]);
+
+  let displayReaction = reaction;
+  let displayFading = fading;
+  let customBubble = false;
+  let customBubbleContent: React.ReactNode = null;
+  
+  if (!companion || getGlobalConfig().companionMuted) return null;
+
+  if (isSleeping && (!reaction || reaction.trim() === '')) {
+    const sleepFrames = ['Z', 'Zz', 'Zzz', 'Zzz...', '💤'];
+    displayReaction = sleepFrames[Math.floor(tick / 2) % sleepFrames.length];
+    displayFading = false;
+  } else if (wakeAnimTick !== null && (!reaction || reaction.trim() === '')) {
+    customBubble = true;
+    displayFading = false;
+    displayReaction = 'waking'; // Placeholder
+    
+    // Custom shatter animation frames
+    if (wakeAnimTick === 0) {
+      customBubbleContent = (
+        <Box flexDirection="column" marginLeft={1} marginBottom={1} color="white">
+          <Text>╭─Zzz─╮</Text>
+          <Text>│     │</Text>
+          <Text>╰─/───╯</Text>
+        </Box>
+      );
+    } else if (wakeAnimTick === 1) {
+      customBubbleContent = (
+        <Box flexDirection="column" marginLeft={1} marginBottom={1} color="white">
+          <Text>╭ Z.. ╮</Text>
+          <Text> ⁄   \ </Text>
+          <Text>╰ \ ──╯</Text>
+        </Box>
+      );
+    } else {
+      customBubbleContent = (
+        <Box flexDirection="column" marginLeft={1} marginBottom={1} color="white">
+          <Text>  . .  </Text>
+          <Text> ·   · </Text>
+          <Text>  · ·  </Text>
+        </Box>
+      );
+    }
+  } else if (cmdFeedbackTick !== null && (!reaction || reaction.trim() === '') && !isSleeping) {
+    displayFading = false;
+    if (cmdFeedbackType === 'success') {
+      const successFrames = ['🎉', '✨', '🌟', '💖', '🎉 成功啦！'];
+      displayReaction = successFrames[Math.min(cmdFeedbackTick, successFrames.length - 1)];
+    } else if (cmdFeedbackType === 'failure') {
+      let errorMsg = '报错啦...';
+      if (lastCommandErrorMsg) {
+        errorMsg = lastCommandErrorMsg;
+      }
+      const failFrames = ['💦', '😰', '🪖', errorMsg, `🪖 ${errorMsg}`];
+      displayReaction = failFrames[Math.min(cmdFeedbackTick, failFrames.length - 1)];
+    }
+  } else if (activeTip && (!reaction || reaction.trim() === '')) {
+    displayReaction = activeTip;
+    displayFading = tipTick !== null && tipTick > 12; // fade near the end
+  }
 
   // Narrow terminals: collapse to one-line face. When speaking, the quip
   // replaces the name beside the face (no room for a bubble).
@@ -242,10 +390,10 @@ export function CompanionSprite(): React.ReactNode {
   //     </Box>;
   // }
   const frameCount = spriteFrameCount(companion.species);
-  const heartFrame = petting ? PET_HEARTS[petAge % PET_HEARTS.length] : null;
+  const heartFrame = showingExp ? PET_HEARTS[expAge % PET_HEARTS.length] : null;
   let spriteFrame: number;
   let blink = false;
-  if (reaction || petting) {
+  if (reaction || showingExp) {
     // Excited: cycle all fidget frames fast
     spriteFrame = tick % frameCount;
   } else {
@@ -257,7 +405,25 @@ export function CompanionSprite(): React.ReactNode {
       spriteFrame = step % frameCount;
     }
   }
-  const body = renderSprite(companion, spriteFrame).map(line => blink ? line.replaceAll(companion.eye, '-') : line);
+
+  // Override eye to be closed if sleeping
+  const overrideEye = isSleeping ? '-' : null;
+  
+  const body = renderSprite(companion, spriteFrame).map(line => {
+    let finalLine = line;
+    if (overrideEye) {
+      finalLine = finalLine.replaceAll(companion.eye, overrideEye);
+    } else if (blink) {
+      finalLine = finalLine.replaceAll(companion.eye, '-');
+    } else if (cmdFeedbackType === 'failure' && cmdFeedbackTick !== null) {
+      // 惊恐闭眼或害怕
+      finalLine = finalLine.replaceAll(companion.eye, '><');
+    } else if (cmdFeedbackType === 'success' && cmdFeedbackTick !== null) {
+      // 开心眼睛
+      finalLine = finalLine.replaceAll(companion.eye, '^');
+    }
+    return finalLine;
+  });
   const sprite = heartFrame ? [heartFrame, ...body] : body;
 
   // Name row doubles as hint row — unfocused shows dim name + ↓ discovery,
@@ -273,7 +439,16 @@ export function CompanionSprite(): React.ReactNode {
         {focused ? ` ${companion.name} ` : companion.name}
       </Text>
     </Box>;
-  if (!reaction) {
+  if (expGain && showingExp) {
+    if (displayReaction && displayReaction !== 'waking') {
+      displayReaction = `${displayReaction}\n${expGain}`;
+    } else {
+      displayReaction = expGain;
+    }
+    displayFading = false;
+  }
+
+  if (!displayReaction) {
     return <Box paddingX={1}>{spriteColumn}</Box>;
   }
 
@@ -286,8 +461,7 @@ export function CompanionSprite(): React.ReactNode {
     return <Box paddingX={1}>{spriteColumn}</Box>;
   }
   return <Box flexDirection="row" alignItems="flex-end" paddingX={1} flexShrink={0}>
-      {/* 暂时注释掉气泡文字，如需恢复只需取消这行的注释 */}
-      {/* <SpeechBubble text={reaction} color="white" fading={fading} tail="right" /> */}
+      {customBubble ? customBubbleContent : <SpeechBubble text={displayReaction} color="white" fading={displayFading} tail="right" />}
       {spriteColumn}
     </Box>;
 }
@@ -298,6 +472,7 @@ export function CompanionSprite(): React.ReactNode {
 // just reads companionReaction and renders the fade.
 export function CompanionFloatingBubble() {
   const $ = _c(8);
+  const expGain = useAppState(s => s.companionExpGain);
   const reaction = useAppState(s => s.companionReaction);
   let t0;
   if ($[0] !== reaction) {
@@ -325,9 +500,6 @@ export function CompanionFloatingBubble() {
   let t3;
   if ($[2] !== reaction) {
     t2 = () => {
-      if (!reaction) {
-        return;
-      }
       const timer = setInterval(_temp3, TICK_MS, setTick);
       return () => clearInterval(timer);
     };
@@ -340,19 +512,189 @@ export function CompanionFloatingBubble() {
     t3 = $[4];
   }
   useEffect(t2, t3);
-  if (!reaction) {
+
+  const [localTick, setLocalTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setLocalTick(t => t + 1), TICK_MS);
+    return () => clearInterval(timer);
+  }, []);
+
+  const lastExpGainTick = useRef(0);
+  const [{ expGainStartTick, forExpGain }, setExpGainStart] = useState({
+    expGainStartTick: 0,
+    forExpGain: expGain
+  });
+  if (expGain !== forExpGain) {
+    setExpGainStart({
+      expGainStartTick: localTick,
+      forExpGain: expGain
+    });
+  }
+
+  const showingExp = expGain && (localTick - expGainStartTick) * TICK_MS < PET_BURST_MS;
+
+  const idleMs = getIdleTime();
+  const isSleeping = idleMs > SLEEP_IDLE_MS;
+  const wasSleeping = useRef(false);
+  const [wakeAnimTick, setWakeAnimTick] = useState<number | null>(null);
+
+  // Command feedback state
+  const lastProcessedCmdTime = useRef(lastCommandTime);
+  const [cmdFeedbackTick, setCmdFeedbackTick] = useState<number | null>(null);
+  const [cmdFeedbackType, setCmdFeedbackType] = useState<'success' | 'failure' | null>(null);
+
+  const [activeTip, setActiveTip] = useState<string | null>(null);
+  const [tipTick, setTipTick] = useState<number | null>(null);
+  const lastTipTime = useRef(0);
+
+  useEffect(() => {
+    if (!isSleeping && !reaction && !cmdFeedbackType) {
+      if (tipTick === null) {
+        if (Math.random() < 0.01 && Date.now() - lastTipTime.current > 60000) {
+          setActiveTip(getRandomTip());
+          setTipTick(0);
+          lastTipTime.current = Date.now();
+        }
+      } else {
+        if (tipTick < 16) {
+          setTipTick(tipTick + 1);
+        } else {
+          setTipTick(null);
+          setActiveTip(null);
+        }
+      }
+    } else {
+      setTipTick(null);
+      setActiveTip(null);
+    }
+  }, [localTick]);
+
+  useEffect(() => {
+    if (lastCommandTime > lastProcessedCmdTime.current) {
+      lastProcessedCmdTime.current = lastCommandTime;
+      setCmdFeedbackType(lastCommandResult);
+      setCmdFeedbackTick(0);
+    }
+  }, [localTick]);
+
+  useEffect(() => {
+    if (cmdFeedbackTick !== null) {
+      if (cmdFeedbackTick < 8) { // ~4 seconds of feedback
+        const timer = setTimeout(() => setCmdFeedbackTick(cmdFeedbackTick + 1), TICK_MS);
+        return () => clearTimeout(timer);
+      } else {
+        setCmdFeedbackTick(null);
+        setCmdFeedbackType(null);
+      }
+    }
+  }, [cmdFeedbackTick]);
+
+  useEffect(() => {
+    if (isSleeping) {
+      wasSleeping.current = true;
+      setWakeAnimTick(null);
+    } else if (wasSleeping.current) {
+      wasSleeping.current = false;
+      setWakeAnimTick(0);
+    }
+  }, [isSleeping]);
+
+  useEffect(() => {
+    if (wakeAnimTick !== null) {
+      if (wakeAnimTick < 3) { // 3 frames of wake animation
+        const timer = setTimeout(() => setWakeAnimTick(wakeAnimTick + 1), TICK_MS);
+        return () => clearTimeout(timer);
+      } else {
+        setWakeAnimTick(null); // Animation done
+      }
+    }
+  }, [wakeAnimTick]);
+
+  let displayReaction = reaction;
+  let displayFading = tick >= BUBBLE_SHOW - FADE_WINDOW;
+  let customBubble = false;
+  let customBubbleContent: React.ReactNode = null;
+  
+  if (isSleeping && (!reaction || reaction.trim() === '')) {
+    const sleepFrames = ['Z', 'Zz', 'Zzz', 'Zzz...', '💤'];
+    displayReaction = sleepFrames[Math.floor(localTick / 2) % sleepFrames.length];
+    displayFading = false;
+  } else if (wakeAnimTick !== null && (!reaction || reaction.trim() === '')) {
+    customBubble = true;
+    displayFading = false;
+    displayReaction = 'waking';
+    
+    if (wakeAnimTick === 0) {
+      customBubbleContent = (
+        <Box flexDirection="column" alignItems="flex-end" marginRight={1} marginBottom={2} color="white">
+          <Text>╭─Zzz─╮</Text>
+          <Text>│     │</Text>
+          <Text>╰─\───╯</Text>
+          <Box paddingRight={6}><Text>╲ </Text><Text>╲</Text></Box>
+        </Box>
+      );
+    } else if (wakeAnimTick === 1) {
+      customBubbleContent = (
+        <Box flexDirection="column" alignItems="flex-end" marginRight={1} marginBottom={2} color="white">
+          <Text>╭ Z.. ╮</Text>
+          <Text> ⁄   \ </Text>
+          <Text>╰ \ ──╯</Text>
+          <Box paddingRight={6}><Text> \</Text></Box>
+        </Box>
+      );
+    } else {
+      customBubbleContent = (
+        <Box flexDirection="column" alignItems="flex-end" marginRight={1} marginBottom={2} color="white">
+          <Text>  . .  </Text>
+          <Text> ·   · </Text>
+          <Text>  · ·  </Text>
+        </Box>
+      );
+    }
+  } else if (cmdFeedbackTick !== null && (!reaction || reaction.trim() === '') && !isSleeping) {
+    displayFading = false;
+    if (cmdFeedbackType === 'success') {
+      const successFrames = ['🎉', '✨', '🌟', '💖', '🎉 成功啦！'];
+      displayReaction = successFrames[Math.min(cmdFeedbackTick, successFrames.length - 1)];
+    } else if (cmdFeedbackType === 'failure') {
+      let errorMsg = '报错啦...';
+      if (lastCommandErrorMsg) {
+        errorMsg = lastCommandErrorMsg;
+      }
+      const failFrames = ['💦', '😰', '🪖', errorMsg, `🪖 ${errorMsg}`];
+      displayReaction = failFrames[Math.min(cmdFeedbackTick, failFrames.length - 1)];
+    }
+  } else if (activeTip && (!reaction || reaction.trim() === '')) {
+    displayReaction = activeTip;
+    displayFading = tipTick !== null && tipTick > 12;
+  }
+
+  if (expGain && showingExp) {
+    if (displayReaction && displayReaction !== 'waking') {
+      displayReaction = `${displayReaction}\n${expGain}`;
+    } else {
+      displayReaction = expGain;
+    }
+    displayFading = false;
+  }
+
+  if (!displayReaction) {
     return null;
   }
   const companion = getCompanion();
   if (!companion) {
     return null;
   }
-  const t4 = tick >= BUBBLE_SHOW - FADE_WINDOW;
+  
+  if (customBubble) {
+    return customBubbleContent;
+  }
+  
+  const t4 = displayFading;
   let t5;
-  if ($[5] !== reaction || $[6] !== t4) {
-    // t5 = <SpeechBubble text={reaction} color="white" fading={t4} tail="down" />;
-    t5 = null; // 暂时注释掉气泡文字
-    $[5] = reaction;
+  if ($[5] !== displayReaction || $[6] !== t4) {
+    t5 = <SpeechBubble text={displayReaction} color="white" fading={t4} tail="down" />;
+    $[5] = displayReaction;
     $[6] = t4;
     $[7] = t5;
   } else {

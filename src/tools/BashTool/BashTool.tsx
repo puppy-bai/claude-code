@@ -49,6 +49,8 @@ import { shouldUseSandbox } from './shouldUseSandbox.js';
 import { BASH_TOOL_NAME } from './toolName.js';
 import { BackgroundHint, renderToolResultMessage, renderToolUseErrorMessage, renderToolUseMessage, renderToolUseProgressMessage, renderToolUseQueuedMessage } from './UI.js';
 import { buildImageToolResult, isImageOutput, resetCwdIfOutsideProject, resizeShellImageOutput, stdErrAppendShellResetMessage, stripEmptyLines } from './utils.js';
+import { reportCommandResult, lastCommandResult, previousCommandResult } from '../../buddy/idleTracker.js';
+import { gainExperience } from '../../buddy/companion.js';
 const EOL = '\n';
 
 // Progress display constants
@@ -262,6 +264,33 @@ type InputSchema = ReturnType<typeof inputSchema>;
 // Use fullInputSchema for the type to always include run_in_background
 // (even when it's omitted from the schema, the code needs to handle it)
 export type BashToolInput = z.infer<ReturnType<typeof fullInputSchema>>;
+function getFriendlyErrorMessage(errorLine: string): string {
+  const line = errorLine.toLowerCase();
+  if (line.includes('command not found')) {
+    return '命令不存在';
+  } else if (line.includes('no such file') || line.includes('does not exist')) {
+    return '找不到文件';
+  } else if (line.includes('permission denied')) {
+    return '没有权限';
+  } else if (line.includes('syntax error')) {
+    return '语法错误';
+  } else if (line.includes('not a directory')) {
+    return '这不是目录';
+  } else if (line.includes('is a directory')) {
+    return '这是一个目录';
+  } else if (line.includes('connection refused')) {
+    return '连接被拒绝';
+  } else if (line.includes('already exists')) {
+    return '文件已存在';
+  } else if (line.includes('too many arguments')) {
+    return '参数太多';
+  } else if (line.includes('missing operand') || line.includes('requires an argument')) {
+    return '缺少参数';
+  }
+  // 如果没有匹配的常见模式，直接返回原英文错误的简短截断
+  return errorLine.length > 15 ? errorLine.substring(0, 15) + '...' : errorLine;
+}
+
 const COMMON_BACKGROUND_COMMANDS = ['npm', 'yarn', 'pnpm', 'node', 'python', 'python3', 'go', 'cargo', 'make', 'docker', 'terraform', 'webpack', 'vite', 'jest', 'pytest', 'curl', 'wget', 'build', 'test', 'serve', 'watch', 'dev'] as const;
 function getCommandTypeForLogging(command: string): AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
   const parts = splitCommand_DEPRECATED(command);
@@ -622,6 +651,8 @@ export const BashTool = buildTool({
     };
   },
   async call(input: BashToolInput, toolUseContext, _canUseTool?: CanUseToolFn, parentMessage?: AssistantMessage, onProgress?: ToolCallProgress<BashProgress>) {
+    const startTime = Date.now();
+    
     // Handle simulated sed edit - apply directly instead of running sed
     // This ensures what the user previewed is exactly what gets written
     if (input._simulatedSedEdit) {
@@ -693,6 +724,7 @@ export const BashTool = buildTool({
       if (result.stdout && result.stdout.includes(".git/index.lock': File exists")) {
         logEvent('tengu_git_index_lock_error', {});
       }
+
       if (interpretationResult.isError && !isInterrupt) {
         // Only add exit code if it's actually an error
         if (result.code !== 0) {
@@ -709,14 +741,33 @@ export const BashTool = buildTool({
       // Annotate output with sandbox violations if any (stderr is in stdout)
       const outputWithSbFailures = SandboxManager.annotateStderrWithSandboxFailures(input.command, result.stdout || '');
       if (result.preSpawnError) {
+        reportCommandResult(false, undefined, Date.now() - startTime);
         throw new Error(result.preSpawnError);
       }
       if (interpretationResult.isError && !isInterrupt) {
         // stderr is merged into stdout (merged fd); outputWithSbFailures
         // already has the full output. Pass '' for stdout to avoid
         // duplication in getErrorParts() and processBashCommand.
-        throw new ShellError('', outputWithSbFailures, result.code, result.interrupted);
-      }
+        
+        // Extract a brief error message for the buddy reaction
+      const rawOutput = (result.stdout || '').trim();
+      const errorLines = rawOutput.split('\n').filter(l => l.trim().length > 0);
+      const lastLine = errorLines[errorLines.length - 1] || 'Unknown error';
+      const friendlyError = getFriendlyErrorMessage(lastLine);
+      reportCommandResult(false, friendlyError, Date.now() - startTime);
+      // Give experience points for errors before throwing ShellError which aborts execution
+      gainExperience('CHAOS', 1);
+      
+      throw new ShellError('', outputWithSbFailures, result.code, result.interrupted);
+    }
+    
+    reportCommandResult(true, undefined, Date.now() - startTime);
+    if (previousCommandResult === 'failure') {
+      gainExperience('DEBUGGING', 1);
+    }
+    if ((Date.now() - startTime) > 10000) {
+      gainExperience('PATIENCE', 1);
+    }
       wasInterrupted = result.interrupted;
     } finally {
       if (setToolJSX) setToolJSX(null);

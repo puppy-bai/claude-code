@@ -31,7 +31,10 @@ import { processUserInput } from './processUserInput/processUserInput.js'
 import type { QueryGuard } from './QueryGuard.js'
 import { queryCheckpoint, startQueryProfile } from './queryProfiler.js'
 import { runWithWorkload } from './workloadContext.js'
+import { reportCommandResult, lastCommandResult, previousCommandResult, lastCommandTime, lastInputTime, experienceAwardedForLastCommand, lastCommandDurationMs, markExperienceAwarded } from '../buddy/idleTracker.js'
+import { gainExperience } from '../buddy/companion.js'
 
+// Exit the application
 function exit(): void {
   gracefulShutdownSync(0)
 }
@@ -557,18 +560,22 @@ async function executeUserInput(params: ExecuteUserInputParams): Promise<void> {
             ? primaryCmd.value
             : undefined
         const shouldCallBeforeQuery = primaryMode === 'prompt'
-        await onQuery(
-          newMessages,
-          abortController,
-          shouldQuery,
-          allowedTools ?? [],
-          model
-            ? resolveSkillModelOverride(model, mainLoopModel)
-            : mainLoopModel,
-          shouldCallBeforeQuery ? onBeforeQuery : undefined,
-          primaryInput,
-          effort,
-        )
+        try {
+          await onQuery(
+            newMessages,
+            abortController,
+            shouldQuery,
+            allowedTools ?? [],
+            model
+              ? resolveSkillModelOverride(model, mainLoopModel)
+              : mainLoopModel,
+            shouldCallBeforeQuery ? onBeforeQuery : undefined,
+            primaryInput,
+            effort,
+          )
+        } catch (err) {
+          throw err
+        }
       } else {
         // Local slash commands that skip messages (e.g., /model, /theme).
         // Release the guard BEFORE clearing toolJSX to prevent spinner flash —
@@ -606,5 +613,6 @@ async function executeUserInput(params: ExecuteUserInputParams): Promise<void> {
     // turn's resetLoadingState. Harmless when onQuery ran: setMessages grew
     // displayedMessages past the baseline, so REPL.tsx already hid it.
     setUserInputOnProcessing(undefined)
+    
   }
 }
